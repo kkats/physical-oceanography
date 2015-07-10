@@ -14,7 +14,7 @@ import qualified Data.Array          as A
 import qualified Data.Packed.Vector  as V
 import qualified Data.Packed.Matrix  as M
 
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 --
 -- | FIR: Hamming
 --
@@ -66,7 +66,7 @@ lpfIIR cutoff sampling s x
           o2  = iir_df2t f zi $ reverse o1
           o2' = reverse $ drop nfact $ take (length o2 - nfact) o2
 
-       in if nfact > length x then trace(show nfact)error "input too short"
+       in if nfact > length x then error "input too short"
                               else (nfilt, o2')
 
 ---

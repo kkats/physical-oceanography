@@ -24,15 +24,15 @@ import Data.Int (Int16)
 
 -- import Text.Printf (printf)
 
-srcFile :: FilePath
-srcFile = "/data/pub/ETOPO/ETOPO5.DOS" -- Little Endian, 16 byte Int
+dataFile :: FilePath
+dataFile = "/data/pub/ETOPO/ETOPO5.DOS" -- Little Endian, 16 byte Int
 
 dEtopo5 :: Double -- grid interval
 dEtopo5 = (1.0 / 12.0)
 
 readEtopo5 :: IO (Array U DIM2 Double, U.Vector Double, U.Vector Double)
 readEtopo5 = do
-    topo' <- readVecI16le srcFile
+    topo' <- readVecI16le dataFile
     let topo = fromUnboxed (ix2 2160 4320) topo'
         lat = map ((* dEtopo5) . i2d) $ reverse $ tail ([(-90*12) .. (90*12)]::[Integer]) -- first is redundant
         lon = map ((* dEtopo5) . i2d) $ init ([(0*12) .. (360*12)]::[Integer])  -- last is redundant

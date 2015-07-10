@@ -6,7 +6,6 @@
 --
 --   Monomorphic : `D` -> `U`
 --
---
 --   To produce (Any :. k) loadP1 loops over "Any" only
 --
 --                                                      from Data.Array.Repa.Eval

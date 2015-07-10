@@ -26,15 +26,15 @@ import Math.FFT
 -- import Statistics.Distribution            (quantile)
 -- import Statistics.Distribution.ChiSquared (chiSquared)
 import Numeric.SpecFunctions (invIncompleteGamma)
+
 -- After Statistics.Distribution.ChiSquared.quantile
 quantileChiSquared :: Double -> Double -> Double
 quantileChiSquared ndof p
     | p == 0         = 0
     | p == 1         = 1/0
     | p > 0 && p < 1 = 2 * invIncompleteGamma (ndof / 2) p
-    | otherwise      = error $ "p must be in [0,1] range. Got: " ++ show p
+    | otherwise      = error $ "p must be in [0,1] range: p=" ++ show p
     
-
 --
 -- | Use Bartlett (P.554, NR).
 -- This will increase eDOF by 50% (see http://researchmap.jp/jomv665bq-44320/#_44320)

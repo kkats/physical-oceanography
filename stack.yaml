@@ -1,5 +1,0 @@
-flags: {}
-packages:
-- oceanogr/
-extra-deps: []
-resolver: lts-2.17

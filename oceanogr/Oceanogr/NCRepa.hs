@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, ConstraintKinds #-}
 --
 -- | NetCDF -> Repa
 --
@@ -111,10 +111,13 @@ getCharAvail info varname
         Nothing -> return Nothing
         Just _  -> Just `fmap` getChar info varname
 
--- | originally Data.NetCDF.coardsScale
---   modified to return NaN when _FillValue
+--
+-- | Patched on Data.NetCDF.coardsScale in hnetcdf <https://github.com/ian-ross/hnetcdf>
+--   modified to return NaN when _FillValue. Origial LICENSE shown at the bottom.
+--
 mycoardsScale :: forall a b s. (NcStorable a, NcStorable b, FromNcAttr a, FromNcAttr b,
-                                NcStore s, Real a, Fractional b, IEEE b)
+                                NcStore s, Real a, Fractional b, IEEE b,
+                                NcStoreExtraCon s a, NcStoreExtraCon s b)
              => NcVar -> s a -> s b
 mycoardsScale v din = Data.NetCDF.Store.smap xform din
   where (offset, scale, fill) = triplet v :: (b, b, Maybe a) -- ScopedTypeVariables
@@ -142,4 +145,34 @@ triplet v = (offset, scale, fill)
   where offset = fromMaybe 0.0 $ ncVarAttr v "add_offset"   >>= fromAttr
         scale  = fromMaybe 1.0 $ ncVarAttr v "scale_factor" >>= fromAttr
         fill   = ncVarAttr v "_FillValue"   >>= fromAttr
-
+--
+-- Copyright (c) 2013, Ian Ross
+-- 
+-- All rights reserved.
+-- 
+-- Redistribution and use in source and binary forms, with or without
+-- modification, are permitted provided that the following conditions are met:
+-- 
+--     * Redistributions of source code must retain the above copyright
+--       notice, this list of conditions and the following disclaimer.
+-- 
+--     * Redistributions in binary form must reproduce the above
+--       copyright notice, this list of conditions and the following
+--       disclaimer in the documentation and/or other materials provided
+--       with the distribution.
+-- 
+--     * Neither the name of Ian Ross nor the names of other
+--       contributors may be used to endorse or promote products derived
+--       from this software without specific prior written permission.
+-- 
+-- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+-- "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+-- LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+-- A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+-- OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+-- SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+-- LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+-- DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+-- THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+-- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+-- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
