@@ -1,0 +1,244 @@
+Only in patched: atg.o
+Only in patched: depth-ns.o
+Only in patched: depth-scv.o
+Only in patched: derthe.o
+Only in patched: eos8d.o
+Only in patched: eosall.o
+Only in patched: e-solve.o
+Only in patched: example
+diff -urw gamma/example.f patched/example.f
+--- gamma/example.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/example.f	2015-07-16 17:24:08.000000000 +0900
+@@ -3,7 +3,8 @@
+ 	implicit double precision (a-h,o-z)
+ 
+         dimension s(nz),t(nz),p(nz),gamma(nz),dgl(nz),dgh(nz)
+-	dimension glevels(nlevels),sns(nlevels),tns(nlevels),pns(nlevels)
++        dimension glevels(nlevels),sns(nlevels),
++     &            tns(nlevels),pns(nlevels)
+ 	dimension dsns(nlevels),dtns(nlevels),dpns(nlevels)
+ 
+ 	data glevels/26.8,27.9,28.1/
+Only in patched: gamma.a
+diff -urw gamma/gamma-errors.f patched/gamma-errors.f
+--- gamma/gamma-errors.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/gamma-errors.f	2015-07-16 17:24:08.000000000 +0900
+@@ -135,7 +135,7 @@
+ 
+ 	      end if
+ 
+-	      call indx(p,n,pscv,kscv)
++              call indxGamma(p,n,pscv,kscv)
+ 	      call gamma_qdr(p(kscv),gamma(kscv),a(kscv),
+      &				p(kscv+1),gamma(kscv+1),pscv,gamma_scv)
+ 
+Only in patched: gamma-errors.o
+diff -urw gamma/gamma-n.f patched/gamma-n.f
+--- gamma/gamma-n.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/gamma-n.f	2015-07-16 17:24:08.000000000 +0900
+@@ -53,7 +53,7 @@
+ 
+ 	save
+ 
+-	external indx
++        external indxGamma
+ 
+ 
+ 
+@@ -74,7 +74,7 @@
+ 	if(along.lt.0.0.or.along.gt.360.0.or.
+      &				alat.lt.-80.0.or.alat.gt.64.0) then
+ 	  print *, '\nERROR 1 in gamma-n.f : out of oceanographic range'
+-	  print *, '\n',along,alat,'  is not contained in [0,360]x[-80,64]'
++          print *, '\n',along,alat,'  is not in [0,360]x[-80,64]'
+ 	  print *
+ 	  stop
+ 	end if
+@@ -98,7 +98,8 @@
+ ccc		read records from the netCDF data file
+ ccc
+ 
+-	call read_nc(along,alat,s0,t0,p0,gamma0,a0,n0,along0,alat0,iocean0)
++        call read_nc(along,alat,s0,t0,p0,
++     &              gamma0,a0,n0,along0,alat0,iocean0)
+ 
+ 
+ ccc
+@@ -183,7 +184,7 @@
+ 
+ 	    if(pns.gt.-99.) then
+ 
+-	      call indx(p0,n0(i0,j0),pns,kns)
++              call indxGamma(p0,n0(i0,j0),pns,kns)
+ 	      call gamma_qdr(p0(kns),gamma0(kns,i0,j0),a0(kns,i0,j0),
+      &				    p0(kns+1),gamma0(kns+1,i0,j0),pns,gw)
+ 
+@@ -191,7 +192,8 @@
+ ccc
+ ccc		error bars
+ ccc
+-	      call gamma_errors(s0(1,i0,j0),t0(1,i0,j0),p0,gamma0(1,i0,j0),
++              call gamma_errors(s0(1,i0,j0),t0(1,i0,j0),
++     &             p0,gamma0(1,i0,j0),
+      &		    		 a0(1,i0,j0),n0(i0,j0),along0(i0),alat0(j0),
+      &				  s(k),t(k),p(k),sns,tns,pns,kns,
+      &				   		gw,g1_err,g2_l_err,g2_h_err)
+Only in patched: gamma-n.o
+Only in patched: gamma-qdr.o
+Only in patched: get-lunit.o
+diff -urw gamma/goor.f patched/goor.f
+--- gamma/goor.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/goor.f	2015-07-16 17:24:08.000000000 +0900
+@@ -41,7 +41,8 @@
+ 
+ 	dimension s(n),t(n),p(n),gamma(n)
+ 
+-	data delt_b/-0.1/, delt_t/0.1/, slope/-0.14/, pr0/0.0/, Tbp/2.7e-8/
++        data delt_b/-0.1/, delt_t/0.1/
++        data slope/-0.14/, pr0/0.0/, Tbp/2.7e-8/
+ 
+ 
+ 
+Only in patched: goor.o
+Only in patched: goor-solve.o
+diff -urw gamma/index.f patched/index.f
+--- gamma/index.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/index.f	2015-07-16 17:24:08.000000000 +0900
+@@ -1,4 +1,4 @@
+-	subroutine indx(x,n,z,k)
++        subroutine indxGamma(x,n,z,k)
+ ccc
+ ccc
+ ccc
+Only in patched: index.o
+diff -urw gamma/Makefile patched/Makefile
+--- gamma/Makefile	1999-10-26 13:11:54.000000000 +0900
++++ patched/Makefile	2015-07-16 17:24:08.000000000 +0900
+@@ -2,7 +2,7 @@
+ ###		 DJ subroutine library gamma.a
+ ###
+ 
+-
++FC = gfortran
+ SOURCES = atg.f \
+ 	  depth-ns.f \
+ 	  depth-scv.f \
+@@ -30,7 +30,8 @@
+ 
+ OBJECTS = $(SOURCES:.f=.o) $(FSOURCES:.F=.o)
+ 
+-FFLAGS = -DPWD="'`pwd`'" -fast -O4 -cg89
++#FFLAGS = -DPWD="'`pwd`'" -fast -O4 -cg89
++FFLAGS = -O2 -fPIC
+ 
+ .KEEP_STATE :
+ .PRECIOUS :
+@@ -38,10 +39,19 @@
+ 
+ ################################################################################
+  
++LINK = gamma.a -L/usr/lib -lnetcdff
+ 
+-gamma.a: gamma.a($(OBJECTS))
++gamma.a: $(OBJECTS)
++	ar rv $@ $(OBJECTS)
+ 	ranlib gamma.a
+ 
++example: gamma.a example.f
++	${FC} ${FFLAGS} -o $@ example.f ${LINK}
++
+ 
+ clean:
+-	-rm -f *% *.bak
++	-rm -f *% *.bak a.out *.o gamma.a example
++
++read-nc.o : read-nc.F
++	${FC} ${FFLAGS} -c $<
++ 
+diff -urw gamma/neutral-surfaces.f patched/neutral-surfaces.f
+--- gamma/neutral-surfaces.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/neutral-surfaces.f	2015-07-16 17:24:08.000000000 +0900
+@@ -65,8 +65,6 @@
+ 
+ 
+ 
+-
+-ccc
+ ccc		detect error condition
+ ccc
+ 
+@@ -109,7 +107,6 @@
+ 
+ 	  end do
+ 
+-
+ ccc
+ ccc		find point(s) of intersection
+ ccc
+@@ -151,7 +148,8 @@
+ 
+ 	      pmid = (p(k)+p(k+1))/2.
+ 
+-	      call eosall(s(k),t(k),p(k),thdum,sthdum,alfa,beta,gdum,sdum)
++              call eosall(s(k),t(k),p(k),thdum,
++     &             sthdum,alfa,beta,gdum,sdum)
+ 	      alfa_l = alfa
+ 	      beta_l = beta
+ 	      call eosall(s(k+1),t(k+1),p(k+1),thdum,sthdum,
+Only in patched: neutral-surfaces.o
+Only in patched: ocean-test.o
+diff -urw gamma/read-nc.F patched/read-nc.F
+--- gamma/read-nc.F	1999-10-26 13:11:54.000000000 +0900
++++ patched/read-nc.F	2015-07-16 17:29:35.000000000 +0900
+@@ -45,13 +45,14 @@
+ 	integer*4 iocean(nx,ny),iocean0(2,2)
+ 
+ 	real*4 along_s(nx),alat_s(ny)
+-	real*4 s0_s(nz,2,2),t0_s(nz,2,2),p0_s(nz),gamma0_s(nz,2,2),a0_s(nz,2,2)
++        real*4 s0_s(nz,2,2),t0_s(nz,2,2),p0_s(nz),
++     &         gamma0_s(nz,2,2),a0_s(nz,2,2)
+ 	real*4 s0_t(nz,2),t0_t(nz,2),gamma0_t(nz,2),a0_t(nz,2)
+ 
+ 	dimension along_d(nx),alat_d(ny),along0(2),alat0(2)
+ 	dimension s0(nz,2,2),t0(nz,2,2),p0(nz),gamma0(nz,2,2),a0(nz,2,2)
+ 
+-	character*60 filename
++	character*256 filename
+ 
+ 	save along_d,alat_d,i0,j0,iocean,p0_s
+ 
+@@ -77,7 +78,8 @@
+ ccc		open the netcdf file and get the variable id's
+ ccc
+ 
+-	  filename = PWD//'/gamma.nc'
++          filename = '/change/this/to/the/absolute/'
++     &             //'path/to/gamma.nc'
+ 	  id_gnc = ncopn(filename,nw,ierr)
+ 
+ 	  if(i0.eq.1.and.j0.eq.1) then
+Only in patched: read-nc.o
+Only in patched: scv-solve.o
+Only in patched: sig-vals.o
+diff -urw gamma/stp-interp.f patched/stp-interp.f
+--- gamma/stp-interp.f	1999-10-26 13:11:54.000000000 +0900
++++ patched/stp-interp.f	2015-07-16 17:24:08.000000000 +0900
+@@ -35,13 +35,13 @@
+ 	
+ 	dimension s(n),t(n),p(n)
+ 
+-	external indx
++        external indxGamma
+ 
+ 	data pr0/0.0/
+ 
+ 
+ 
+-	call indx(p,n,p0,k)
++        call indxGamma(p,n,p0,k)
+ 
+ 	r = (p0-p(k))/(p(k+1)-p(k))
+ 
+Only in patched: stp-interp.o
+Only in patched: svan.o
+Only in patched: theta.o

@@ -4,9 +4,9 @@ flags:
 #    splitbase: false
 #    base4: true
 packages:
-- GSW/
 - oceanogr/
 - oceanogr/hstatistics-patched/
+- gamma-n/
 extra-deps:
 - carray-0.1.5.2
 - data-endian-0.1
