@@ -19,7 +19,7 @@ version:             0.1.1.0
 -- description:         
 
 -- The license under which the package is released.
-license:             NYSL
+license:             OtherLicense
 
 -- The file containing the license text.
 license-file:        LICENSE
@@ -40,8 +40,7 @@ build-type:          Simple
 
 -- Extra files to be distributed with the package, such as examples or a 
 -- README.
-extra-source-files:  patch.hstatistics,
-                     cabal.config
+extra-source-files:  patch.hstatistics
 
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.10

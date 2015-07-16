@@ -1,0 +1,20 @@
+flags:
+  carray:
+    bytestringinbase: false
+#    splitbase: false
+#    base4: true
+packages:
+- GSW/
+- oceanogr/
+- oceanogr/hstatistics-patched/
+extra-deps:
+- carray-0.1.5.2
+- data-endian-0.1
+- dsp-0.2.3
+- fft-0.1.8.1
+- hnetcdf-0.3.0.0
+- ix-shapable-0.1.0
+- random-1.0.1.1
+extra-lib-dirs:
+- /usr/lib/gcc/x86_64-linux-gnu/4.6/
+resolver: lts-2.18
