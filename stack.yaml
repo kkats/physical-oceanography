@@ -15,6 +15,4 @@ extra-deps:
 - hnetcdf-0.3.0.0
 - ix-shapable-0.1.0
 - random-1.0.1.1
-extra-lib-dirs:
-- /usr/lib/gcc/x86_64-linux-gnu/4.6/
 resolver: lts-2.18
