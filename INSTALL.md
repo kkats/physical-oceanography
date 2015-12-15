@@ -8,7 +8,7 @@ Download source package of [hstatistics](https://hackage.haskell.org/package/hst
     % tar xvfz $(DOWNLOAD)/hstatistics-0.2.5.2.tar.gz
 
 
-Apply hstatistics.patch and install first
+Apply patch.hstatistics and install right away
 
     % mv hstatistics-0.2.5.2 hstatistics-patched
     % cd hstatistics-patched

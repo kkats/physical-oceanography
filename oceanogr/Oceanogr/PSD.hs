@@ -1,9 +1,8 @@
+-- |
+-- Power Spectrum Density using FFT
+--
+--
 module Oceanogr.PSD (psd) where
---
--- | Power Spectrum Density
---
--- using FFT
---
 import Oceanogr.LeastSquare           (lsFit2dangerous)
 
 import qualified Data.Vector.Unboxed as VU

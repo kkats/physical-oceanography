@@ -15,4 +15,4 @@ extra-deps:
 - hnetcdf-0.3.0.0
 - ix-shapable-0.1.0
 - random-1.0.1.1
-resolver: lts-2.18
+resolver: lts-2.22

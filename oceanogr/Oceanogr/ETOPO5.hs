@@ -1,6 +1,4 @@
-module Oceanogr.ETOPO5 (readEtopo5, dEtopo5) where
 -- |
---  usage: [topo, lon, lat] = etopo5();
 --
 -- "/The file may be thought of as having a logical record size of 
 --  8640 bytes.  The data start at the North Pole (90 deg N, 0 deg 0'E)
@@ -14,7 +12,7 @@ module Oceanogr.ETOPO5 (readEtopo5, dEtopo5) where
 --
 --        <http://www.ngdc.noaa.gov/mgg/global/relief/ETOPO5/TOPO/ETOPO5/ETOPO5.txt>
 --
-
+module Oceanogr.ETOPO5 (readEtopo5, dEtopo5) where
 import Data.Array.Repa hiding (map)
 import Data.Binary.Get
 import qualified Data.Vector.Unboxed as U

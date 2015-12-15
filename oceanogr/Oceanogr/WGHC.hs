@@ -1,14 +1,11 @@
+-- |
+-- WOCE climatology
+--
 module Oceanogr.WGHC (WGHC(..), readWGHCraw, wghc2bin,
                       longitude, latitude, depth) where
--- |
---
--- WOCE climatology http://odv.awi.de/en/data/ocean/woce_global_hydrographic_climatology/ (better website?)
---
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Data.Array.Repa hiding (map, (++), Source)
-import Data.Array.Repa.Repr.Unboxed
-import Data.Array.Repa.Index
 import Data.Attoparsec.ByteString (parseOnly)
 import Data.Attoparsec.ByteString.Char8 (double, signed, decimal)
 import qualified Data.ByteString.Char8       as B
@@ -17,7 +14,6 @@ import Data.Conduit
 import qualified Data.Conduit.List           as CL
 import qualified Data.Vector.Unboxed         as V
 import qualified Data.Vector.Unboxed.Mutable as VM
-import Foreign.C.Types (CFloat)
 import GHC.Float (double2Float)
 import Oceanogr.BinaryIO (appendVecF, writeVecF)
 import Numeric.IEEE (nan)
@@ -52,70 +48,70 @@ km = V.length depth
 
 -- data from one grid
 -- comments are mostly copied from read_wghc_climatology.f
-data WGHC1 = WGHC1 Float -- ^ longitude
-                   Float -- ^ latitude
-                   Float -- ^ depth (m) of the k-th level
-                   Float -- ^ ETOPO5 bottom depth
-                   -- =1=
-                   Int   -- ^ number of gridded levels
-                   Float -- ^ radius of the influence bubble (km)
-                   Float -- ^ decorrelation length scale (km)
-                   Float -- ^ mixed layer depth (m), defined as depth where vertical density gradient >= 0.005 kg/m4
-                   -- =2=
-                   Float -- ^ pressure (dbar)
-                   Float -- ^ temperature in situ (deg C)
-                   Float -- ^ potemtial temperature (deg C)
-                   Float -- ^ salinity (PSU?)
-                   -- =3=
-                   Float -- ^ dissolved oxygen (ml/L)
-                   Float -- ^ silicate (umol/kg)
-                   Float -- ^ nitrate (umol/kg)
-                   Float -- ^ phosphate (umol/kg)
-                   -- =4=
-                   Float -- ^ gamma-n (kg/m3)
-                   Float -- ^ sigma 0 (kg/m3)
-                   Float -- ^ sigma 2 (kg/m3)
-                   Float -- ^ sigma 4 (kg/m3)
-                   -- =5=
-                   Float -- ^ relative optimum interpolation error for T, Theta & S
-                   Float -- ^ relative optimum interpolation error for Oxygen
-                   Float -- ^ relative optimum interpolation error for Silicate
-                   Float -- ^ relative optimum interpolation error for Nitrate
-                   Float -- ^ relative optimum interpolation error for Phosphate
-                   Int   -- ^ actual number of observations used for the optimal interpolation of T, Theta & S
-                   Int   -- ^ actual number of observations used for the optimal interpolation of Oxygen
-                   Int   -- ^ actual number of observations used for the optimal interpolation of Silicate
-                   Int   -- ^ actual number of observations used for the optimal interpolation of Nitrate
-                   Int   -- ^ actual number of observations used for the optimal interpolation of Phosphate
-                   Float -- ^ temperature standard deviation  from the mean (within the influence radius = radcor)  
-                   Float -- ^ salinity    standard deviation  from the mean (within the influence radius = radcor)  
-                   Float -- ^ oxygen      standard deviation  from the mean (within the influence radius = radcor)  
-                   Float -- ^ silicate    standard deviation  from the mean (within the influence radius = radcor)  
-                   Float -- ^ nitrate     standard deviation  from the mean (within the influence radius = radcor)  
-                   Float -- ^ phosphate   standard deviation  from the mean (within the influence radius = radcor)  
+data WGHC1 = WGHC1 Float --  longitude
+                   Float --  latitude
+                   Float --  depth (m) of the k-th level
+                   Float --  ETOPO5 bottom depth
+                   -- [1]
+                   Int   --  number of gridded levels
+                   Float --  radius of the influence bubble (km)
+                   Float --  decorrelation length scale (km)
+                   Float --  mixed layer depth (m), defined as depth where vertical density gradient >= 0.005 kg/m4
+                   -- [2]
+                   Float --  pressure (dbar)
+                   Float --  temperature in situ (deg C)
+                   Float --  potemtial temperature (deg C)
+                   Float --  salinity (PSU?)
+                   -- [3]
+                   Float --  dissolved oxygen (ml/L)
+                   Float --  silicate (umol/kg)
+                   Float --  nitrate (umol/kg)
+                   Float --  phosphate (umol/kg)
+                   -- [4]
+                   Float --  gamma-n (kg/m3)
+                   Float --  sigma 0 (kg/m3)
+                   Float --  sigma 2 (kg/m3)
+                   Float --  sigma 4 (kg/m3)
+                   -- [5]
+                   Float --  relative optimum interpolation error for T, Theta & S
+                   Float --  relative optimum interpolation error for Oxygen
+                   Float --  relative optimum interpolation error for Silicate
+                   Float --  relative optimum interpolation error for Nitrate
+                   Float --  relative optimum interpolation error for Phosphate
+                   Int   --  actual number of observations used for the optimal interpolation of T, Theta & S
+                   Int   --  actual number of observations used for the optimal interpolation of Oxygen
+                   Int   --  actual number of observations used for the optimal interpolation of Silicate
+                   Int   --  actual number of observations used for the optimal interpolation of Nitrate
+                   Int   --  actual number of observations used for the optimal interpolation of Phosphate
+                   Float --  temperature standard deviation  from the mean (within the influence radius = radcor)  
+                   Float --  salinity    standard deviation  from the mean (within the influence radius = radcor)  
+                   Float --  oxygen      standard deviation  from the mean (within the influence radius = radcor)  
+                   Float --  silicate    standard deviation  from the mean (within the influence radius = radcor)  
+                   Float --  nitrate     standard deviation  from the mean (within the influence radius = radcor)  
+                   Float --  phosphate   standard deviation  from the mean (within the influence radius = radcor)  
 
 -- data from whole grids
-                  -- =1=
+                  -- [1]
 data WGHC = WGHC {getnbrlev  :: V.Vector Int,
                   getradbub  :: V.Vector Float,
                   getradcor  :: V.Vector Float,
                   getdepthml :: V.Vector Float,
-                  -- =2=
+                  -- [2]
                   getpres    :: V.Vector Float,
                   gettemp    :: V.Vector Float,
                   getptem    :: V.Vector Float,
                   getsalt    :: V.Vector Float,
-                  -- =3=
+                  -- [3]
                   getdoxy    :: V.Vector Float,
                   getsili    :: V.Vector Float,
                   getntra    :: V.Vector Float,
                   getpsha    :: V.Vector Float,
-                  -- =4=
+                  -- [4]
                   getgamn    :: V.Vector Float,
                   getsig0    :: V.Vector Float,
                   getsig2    :: V.Vector Float,
                   getsig4    :: V.Vector Float,
-                  -- =5=
+                  -- [5]
                   geterr1    :: V.Vector Float,
                   geterr2    :: V.Vector Float,
                   geterr3    :: V.Vector Float,
@@ -142,27 +138,27 @@ readWGHCraw = do
     let len2 = im * jm
         len3 = len2 * km
 
-    -- =1=
+    -- [1]
     nbrlev <- VM.replicate len2 0   :: IO (VM.IOVector Int)
     radbub <- VM.replicate len2 0   :: IO (VM.IOVector Float)
     radcor <- VM.replicate len2 0   :: IO (VM.IOVector Float)
     depthml<- VM.replicate len2 0   :: IO (VM.IOVector Float)
-    -- =2=
+    -- [2]
     pres   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     temp   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     ptem   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     salt   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
-    -- =3=
+    -- [3]
     doxy   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     sili   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     ntra   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     psha   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
-    -- =4=
+    -- [4]
     gamn   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     sig0   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     sig2   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     sig4   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
-    -- =5=
+    -- [5]
     err1   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     err2   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
     err3   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
@@ -207,12 +203,12 @@ readWGHCraw = do
                     -> Sink B.ByteString (ResourceT IO) ()
         fillWGHCs header body
           = let fillWGHC :: WGHC1 -> Sink B.ByteString (ResourceT IO) ()
-                fillWGHC (WGHC1 x  y  z  e
-                                n  rb rc d     -- =1=
-                                p  t  pt s     -- =2=
-                                o  si na pa    -- =3=
-                                g  s0 s2 s4    -- =4=
-                                e1 e2 e3 e4 e5 -- =5=
+                fillWGHC (WGHC1 x  y  z  _
+                                n  rb rc d     -- [1]
+                                p  t  pt s     -- [2]
+                                o  si na pa    -- [3]
+                                g  s0 s2 s4    -- [4]
+                                e1 e2 e3 e4 e5 -- [5]
                                 l1 l2 l3 l4 l5
                                 v1 v2 v3 v4 v5 v6)
                   = if isNaN (x + y + z)
@@ -226,27 +222,27 @@ readWGHCraw = do
                                  Just (ii,jj,kk) -> do
                                    let ind2 = toIndex (ix2 jm im) (ix2 jj ii)
                                        ind3 = toIndex (ix3 km jm im) (ix3 kk jj ii)
-                                   -- =1=
+                                   -- [1]
                                    liftIO $ VM.write nbrlev  ind2 n
                                    liftIO $ VM.write radbub  ind2 rb
                                    liftIO $ VM.write radcor  ind2 rc
                                    liftIO $ VM.write depthml ind2 d
-                                   -- =2=
+                                   -- [2]
                                    liftIO $ VM.write pres    ind3 p
                                    liftIO $ VM.write temp    ind3 t
                                    liftIO $ VM.write ptem    ind3 pt
                                    liftIO $ VM.write salt    ind3 s
-                                   -- =3=
+                                   -- [3]
                                    liftIO $ VM.write doxy    ind3 o
                                    liftIO $ VM.write sili    ind3 si
                                    liftIO $ VM.write ntra    ind3 na
                                    liftIO $ VM.write psha    ind3 pa
-                                   -- =4=
+                                   -- [4]
                                    liftIO $ VM.write gamn    ind3 g
                                    liftIO $ VM.write sig0    ind3 s0
                                    liftIO $ VM.write sig2    ind3 s2
                                    liftIO $ VM.write sig4    ind3 s4
-                                   -- =5=
+                                   -- [5]
                                    liftIO $ VM.write err1    ind3 e1
                                    liftIO $ VM.write err2    ind3 e2
                                    liftIO $ VM.write err3    ind3 e3
@@ -269,27 +265,27 @@ readWGHCraw = do
 
     runResourceT $ source =$= fileRead $$ sink
     
-    -- =1=
+    -- [1]
     nbrlev_  <- V.unsafeFreeze nbrlev
     radbub_  <- V.unsafeFreeze radbub
     radcor_  <- V.unsafeFreeze radcor
     depthml_ <- V.unsafeFreeze depthml
-    -- =2=
+    -- [2]
     pres_   <- V.unsafeFreeze pres
     temp_   <- V.unsafeFreeze temp
     ptem_   <- V.unsafeFreeze ptem
     salt_   <- V.unsafeFreeze salt
-    -- =3=
+    -- [3]
     doxy_   <- V.unsafeFreeze doxy
     sili_   <- V.unsafeFreeze sili
     ntra_   <- V.unsafeFreeze ntra
     psha_   <- V.unsafeFreeze psha
-    -- =4=
+    -- [4]
     gamn_   <- V.unsafeFreeze gamn
     sig0_   <- V.unsafeFreeze sig0
     sig2_   <- V.unsafeFreeze sig2
     sig4_   <- V.unsafeFreeze sig4
-    -- =5=
+    -- [5]
     err1_   <- V.unsafeFreeze err1
     err2_   <- V.unsafeFreeze err2
     err3_   <- V.unsafeFreeze err3
@@ -306,11 +302,11 @@ readWGHCraw = do
     var4_   <- V.unsafeFreeze var4
     var5_   <- V.unsafeFreeze var5
     var6_   <- V.unsafeFreeze var6
-    return $ WGHC nbrlev_ radbub_ radcor_ depthml_ -- =1=
-                  pres_   temp_   ptem_   salt_    -- =2=
-                  doxy_   sili_   ntra_   psha_    -- =3=
-                  gamn_   sig0_   sig2_   sig4_    -- =4=
-                  err1_   err2_   err3_   err4_  err5_ -- =5=
+    return $ WGHC nbrlev_ radbub_ radcor_ depthml_ -- [1]
+                  pres_   temp_   ptem_   salt_    -- [2]
+                  doxy_   sili_   ntra_   psha_    -- [3]
+                  gamn_   sig0_   sig2_   sig4_    -- [4]
+                  err1_   err2_   err3_   err4_  err5_ -- [5]
                   lev1_   lev2_   lev3_   lev4_  lev5_
                   var1_   var2_   var3_   var4_  var5_ var6_
 
@@ -355,7 +351,9 @@ ff missing s0 = let x1 = either (\_ -> nan) double2Float (parseOnly double (prep
                       else x1
 
 fi :: B.ByteString -> Int
-fi s0 = either (\_ -> 0) fromIntegral (parseOnly (signed decimal) (prepstring s0))
+fi s0 = let p :: Either String Int
+            p = parseOnly (signed decimal) (prepstring s0)
+         in either (\_ -> 0) fromIntegral p
 
 parseGrid :: B.ByteString -> [B.ByteString] -> [WGHC1]
 parseGrid header body
@@ -383,14 +381,14 @@ parseBody nbrlev radbub radcor depthml ll
         temp = ff (-9) $ (B.take 10 . B.drop 30) ll
         ptem = ff (-9) $ (B.take 10 . B.drop 40) ll
         salt = ff (-9) $ (B.take 10 . B.drop 50) ll
-    -- *f8.3  (par(6))
+    -- f8.3  (par(6))
         doxy = ff (-9) $ (B.take 8 . B.drop 60) ll
     -- f8.2   (par(7))
         sili = ff (-9) $ (B.take 8 . B.drop 68) ll
     -- 2f8.3  (par(8),par(9))
         ntra = ff (-9) $ (B.take 8 . B.drop 76) ll
         psha = ff (-9) $ (B.take 8 . B.drop 84) ll
-    -- *5f5.2 (error(ipa,k),ipa=1,5)
+    -- 5f5.2 (error(ipa,k),ipa=1,5)
         err1 = ff (-9) $ (B.take 5 . B.drop 92) ll
         err2 = ff (-9) $ (B.take 5 . B.drop 97) ll
         err3 = ff (-9) $ (B.take 5 . B.drop 102) ll
@@ -402,7 +400,7 @@ parseBody nbrlev radbub radcor depthml ll
         lev3 = fi $ (B.take 4 . B.drop 125) ll
         lev4 = fi $ (B.take 4 . B.drop 129) ll
         lev5 = fi $ (B.take 4 . B.drop 133) ll
-    -- *6f8.3 (var(ipa,k),ipa=1,6)
+    -- 6f8.3 (var(ipa,k),ipa=1,6)
         var1 = ff (-9) $ (B.take 8 . B.drop 137) ll
         var2 = ff (-9) $ (B.take 8 . B.drop 145) ll
         var3 = ff (-9) $ (B.take 8 . B.drop 153) ll
@@ -415,11 +413,11 @@ parseBody nbrlev radbub radcor depthml ll
         sig2 = ff (-9) $ (B.take 10 . B.drop 205) ll
         sig4 = ff (-9) $ B.drop 215 ll
      in WGHC1 long   lati   dept   etdp
-              nbrlev radbub radcor depthml  -- =1=
-              pres   temp   ptem   salt     -- =2=
-              doxy   sili   ntra   psha     -- =3=
-              gamn   sig0   sig2   sig4     -- =4=
-              err1   err2   err3   err4   err5 -- =5=
+              nbrlev radbub radcor depthml  -- [1]
+              pres   temp   ptem   salt     -- [2]
+              doxy   sili   ntra   psha     -- [3]
+              gamn   sig0   sig2   sig4     -- [4]
+              err1   err2   err3   err4   err5 -- [5]
               lev1   lev2   lev3   lev4   lev5
               var1   var2   var3   var4   var5   var6
 
