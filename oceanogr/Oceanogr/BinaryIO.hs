@@ -52,7 +52,7 @@ parser :: Get a -> Get [a] -- read until EOF
 parser getf = do
     ie <- isEmpty
     if ie then return []
-          else (:) <$> getf <*> (parser getf)
+          else (:) <$> getf <*> parser getf
 
 -- | write a vector
 writeVecF :: FilePath -> U.Vector Float -> IO ()
@@ -92,7 +92,7 @@ writeMatF fname arr =
 
         -- after Data.Array.Repa.IO.Binary.writeArrayToStorableFile
         let bytes1      = sizeOf (arr ! zeroDim)
-        let bytesTotal  = bytes1 * (size $ extent arr)
+        let bytesTotal  = bytes1 * size (extent arr)
         
         buf  <- mallocBytes bytesTotal :: IO (Ptr Float)
         fptr <- newForeignPtr finalizerFree buf        

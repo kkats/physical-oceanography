@@ -57,7 +57,7 @@ psd ns nb x = do
         (k, nz)  = if n `rem` ns == 0  -- number of zero-padding
                      then (k',  0)
                      else (k'+1, ns - n `rem` ns)
-        k2 = if k `rem` 2 == 0 then k `div` 2 else (k+1) `div` 2
+        k2 = if even k then k `div` 2 else (k+1) `div` 2
         xv = VU.fromList x
 
     when (nz /= 0) $ hPutStrLn stderr ("PSD.psd: zero padding " ++ show nz ++ " data")
@@ -69,8 +69,8 @@ psd ns nb x = do
                                              size = to - from + 1
                                           in if (k-size) /= nz -- just checking
                                                then error "?"
-                                               else (VU.toList $ VU.slice from size xv)
-                                                 ++ (take nz $ repeat 0) -- zero padding
+                                               else VU.toList (VU.slice from size xv)
+                                                 ++ replicate nz 0 -- zero padding
                 psdWindow $ detrend xin
                 )
 
@@ -94,7 +94,7 @@ psd ns nb x = do
                 * (fromIntegral ns - 1 + fromIntegral k / fromIntegral (k + nz))
                 * dofWindow
 
-        conf = map (\c' -> dof / c') $ map (quantileChiSquared dof) [0.975, 0.025]
+        conf = map ((\c' -> dof / c') . quantileChiSquared dof) [0.975, 0.025]
 
     return (ff, pp, conf)
 
@@ -104,8 +104,8 @@ detrend :: [Double] -> [Double]
 detrend x = let n  = length x
                 n2 = n `div` 2
                 a1, a2 :: [Double]
-                a1 = map (\a -> fromIntegral a) $ take n [negate n2, 1-negate n2 ..]
-                a2 = take n $ repeat 1
+                a1 = map fromIntegral $ take n [negate n2, 1-negate n2 ..]
+                a2 = replicate n 1
                 (b', _, _) = lsFit2dangerous x a1 a2 -- last argument is dummy
                 b  = concat b'
              in zipWith3 (\x' a1' a2' -> x' - a1' * (b !! 0) - a2' * (b !! 1)) x a1 a2
@@ -116,7 +116,7 @@ binAverage _ [] _ = []
 binAverage _ _ [] = []
 binAverage n f p = let (fa, fb) = splitAt n f
                        (pa, pb) = splitAt n p
-                    in (sum fa / (fromIntegral $ length fa), sum pa):binAverage n fb pb
+                    in (sum fa / fromIntegral (length fa), sum pa):binAverage n fb pb
                             -- "summed (not averaged)" (P.552)
 
 --
@@ -149,13 +149,13 @@ psdRaw x = do
 
     -- when (n /= n') $ error "inconsistency in length"
 
-    let n2  = if n `rem` 2 == 0 then n `div` 2 else (n+1) `div` 2
+    let n2  = if even n then n `div` 2 else (n+1) `div` 2
         nsq = fromIntegral (n * n) :: Double
         pow'= map (\i -> if i == 0
                             then (b VS.! 0)**2 / nsq
                             else ((b VS.! i)**2 + (b VS.! (n-i))**2) / nsq) [0 .. (n2-1)]
-        pow = if n `rem` 2 == 0 then pow' ++ [(b VS.! n2)**2 / nsq]
-                                else pow'
+        pow = if even n then pow' ++ [(b VS.! n2)**2 / nsq]
+                        else pow'
 
     return $ VU.fromList pow
 

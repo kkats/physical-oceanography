@@ -1,18 +1,27 @@
-flags:
-  carray:
-    bytestringinbase: false
-#    splitbase: false
-#    base4: true
+resolver: lts-6.10
+#resolver: nightly-2016-08-23
+# 
 packages:
 - oceanogr/
 - oceanogr/hstatistics-patched/
 - gamma-n/
+#- ../../GitHub/hnetcdf/
+- location:
+    git: https://github.com/kkats/hnetcdf.git
+    commit: 6be628b1042d22057ce4630ebb817401aa7014dd
+- location:
+    git: https://github.com/kkats/hmatrix-repa.git
+    commit: 4fcf7e83663f8de6a380120158078b4169c2fa71
+#
+#extra-deps: []
+#
 extra-deps:
-- carray-0.1.5.2
-- data-endian-0.1
-- dsp-0.2.3
-- fft-0.1.8.1
+- data-endian-0.1.1
+- dsp-0.2.3.1
 - hnetcdf-0.3.0.0
-- ix-shapable-0.1.0
-- random-1.0.1.1
-resolver: lts-2.22
+
+# Override default flag values for local packages and extra-deps
+flags: {}
+
+# Extra package databases containing global packages
+extra-package-dbs: []

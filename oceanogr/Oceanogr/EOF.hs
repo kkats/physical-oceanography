@@ -1,7 +1,7 @@
 --
 -- | EOF solver
 --
---   purely sequential (despite use of Repa!)
+--  Empirical Orthogonal Functions -- purely sequential (despite use of Repa!)
 --
 module Oceanogr.EOF (
         doEOF, doEOFeigOnly)
@@ -11,7 +11,7 @@ import Data.Array.Repa as Repa hiding ((++))
 import qualified Data.Array.IArray           as A
 import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.Packed.Vector          as V
+import qualified Numeric.LinearAlgebra.Data  as V
 
 import Control.Monad                    (forM_) -- , forM)
 import Data.Packed.Repa                 (repaToVector, matrixToRepa)
@@ -73,7 +73,7 @@ doEOF input nmodes = do
 
         -- spatial pattern
         U.mapM_ (\i -> M.write buf (offset + oivec U.! i)
-                                   (double2Float $ sp `unsafeIndex` (ix1 i)))
+                                   (double2Float $ sp `unsafeIndex` ix1 i))
                                                     $ U.fromList [0 .. (nocean-1)]
 
         -- return $ trace(printf "mode %d: %12.3f x %12.3f / %12.3f [%12.3f] = %.4f"
@@ -87,7 +87,7 @@ doEOF input nmodes = do
 
     -- the following two gives the same result
     -- return (buf'', s, co)
-    return (buf'', s, take nmodes $ Prelude.map (/ (sum v)) v)
+    return (buf'', s, take nmodes $ Prelude.map (/ sum v) v)
 
 doEOFeigOnly :: Array U DIM2 Float -- ^ matrix (space idx, time idx) masked by NaN's
              -> [Double]           -- ^ eigenvalues NOT modal contribution

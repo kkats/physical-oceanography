@@ -32,7 +32,7 @@ get1Double :: NcInfo NcRead -> String -> IO CDouble
 get1Double info varname
   = case ncVar info varname of
       Nothing  -> error "getOne: no such variable"
-      Just var -> do
+      Just var ->
         case ncVarType var of
             NcInt -> do
                 eval <- get1 info var [0] :: IO (Either NcError CInt)
@@ -46,7 +46,7 @@ getReal :: forall sh a. (Shape sh, Real a, FromNcAttr a, NcStorable a, IEEE a)
 getReal info varname
   = case ncVar info varname of
       Nothing  -> error "getReal: no such variable"
-      Just var -> do
+      Just var ->
         case ncVarType var of
             NcDouble -> do
                 eval <- get info var :: IO (Either NcError (Array F sh CDouble))
@@ -119,7 +119,7 @@ mycoardsScale :: forall a b s. (NcStorable a, NcStorable b, FromNcAttr a, FromNc
                                 NcStore s, Real a, Fractional b, IEEE b,
                                 NcStoreExtraCon s a, NcStoreExtraCon s b)
              => NcVar -> s a -> s b
-mycoardsScale v din = Data.NetCDF.Store.smap xform din
+mycoardsScale v = Data.NetCDF.Store.smap xform
   where (offset, scale, fill) = triplet v :: (b, b, Maybe a) -- ScopedTypeVariables
         xform x = case fill of
                     Nothing -> realToFrac $ realToFrac x * scale + offset

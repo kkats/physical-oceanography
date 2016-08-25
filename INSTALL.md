@@ -2,26 +2,28 @@
 
 ## oceanogr
 
-Download source package of [hstatistics](https://hackage.haskell.org/package/hstatistics).  Tested with version 0.2.5.2 but should work as far as Numeric.Statistics.PCA is not drastically modified. Expand it at the same directory as oceanogr.cabal.
+The [GNU Scientific Library](https://www.gnu.org/software/gsl/gsl.html) must be installed in your system.
+
+Download source package of [hstatistics](https://hackage.haskell.org/package/hstatistics).  Tested with version 0.2.5.3 but should work as far as Numeric.Statistics.PCA is not drastically modified. Expand it at the same directory as oceanogr.cabal.
 
     % cd oceanogr
-    % tar xvfz $(DOWNLOAD)/hstatistics-0.2.5.2.tar.gz
-
+    % tar xvfz $(DOWNLOAD)/hstatistics-0.2.5.3.tar.gz
 
 Apply patch.hstatistics and install right away
 
-    % mv hstatistics-0.2.5.2 hstatistics-patched
+    % mv hstatistics-0.2.5.3 hstatistics-patched
     % cd hstatistics-patched
     % patch -p1 < ../patch.hstatistics
     % mv hstatistics.cabal hstatistics-patched.cabal
     % stack install hstatistics-patched
 
+As of 25 Aug 2016, patches are necessary for [hnetcdf](https://github.com/ian-ross/hnetcdf) and [hmatrix-repa](https://github.com/amcphail/hmatrix-repa). See stack.yaml for detail.
+
 ## gamma-n
 
-Due to the use of *double precision* rather than *single*, we use [Fortran/Matlab](http://www.teos-10.org/preteos10_software/gamma.tar.Z), not the Fortran only version.
+Because of the use of *double precision* rather than *single*, we use [Fortran/Matlab](http://www.teos-10.org/preteos10_software/gamma.tar.Z), not the Fortran only version.
 
     % cd gamma-n
-    % mkdir fortran
     % cd fortran
     % gzip -dc $(DOWNLOAD)/gamma.tar.Z | tar xvf -
 
@@ -40,7 +42,10 @@ Change the location of the data file `gamma.nc` at lines 81 to 82 in `read-nc.F`
 
 A table of neutral density from 1 to 3000 dbar followed by interpolated salinity, temperature, pressure should appear on screen.
 
+    % cd ../..
     % stack build
     % stack test
 
 Two tables will be output. The first table is the output from this Haskell interface. The second is a copy of Fortran output. Sould be the same except format differences.
+
+# Installation

@@ -1,7 +1,5 @@
 -- Gaussian filter for topography
 ---- $Id: SmoothTopo.hs,v 1.1 2014/02/24 01:42:14 ka Exp ka $
-{-# LANGUAGE BangPatterns #-}
-
 module Oceanogr.Misc
             (idx2sub,
              interp2,
@@ -26,12 +24,12 @@ import qualified Data.Vector.Unboxed as U
 findRange, findRange' :: Array U DIM1 Double -> (Double, Double) -> [Int]
 -- 1. AND version
 findRange ruler (low, high)
-        = filter (\i -> let x = ruler `unsafeIndex` (ix1 i) in low <= x && x <= high)
-                                                        [0 .. ((size $ extent ruler)-1)]
+        = filter (\i -> let x = ruler `unsafeIndex` ix1 i in low <= x && x <= high)
+                                                        [0 .. (size (extent ruler)-1)]
 -- 2. OR version
 findRange' ruler (low, high)
-        = filter (\i -> let x = ruler `unsafeIndex` (ix1 i) in low <= x || x <= high)
-                                                        [0 .. ((size $ extent ruler)-1)]
+        = filter (\i -> let x = ruler `unsafeIndex` ix1 i in low <= x || x <= high)
+                                                        [0 .. (size (extent ruler)-1)]
 
 --
 -- | NaN's
@@ -40,18 +38,18 @@ nanmean, nansum, nanvar :: (RealFloat a) => [a] -> a
 nansum xs = sum $ filter (not . isNaN) xs
 {-# INLINE nansum #-}
 nanmean xs = let xs' = filter (not . isNaN) xs
-              in sum xs' / (fromIntegral $ length xs')
+              in sum xs' / fromIntegral (length xs')
 {-# INLINE nanmean #-}
 nanvar xs = let xs' = filter (not . isNaN) xs
-                n   = fromIntegral $ length xs'
-             in (sum $ Prelude.map (^(2::Integer)) xs') / n - ((sum xs') / n)^(2::Integer)
+                n   = fromIntegral (length xs')
+             in sum (Prelude.map (^(2::Integer)) xs') / n - (sum xs' / n)^(2::Integer)
 {-# INLINE nanvar #-}
 --
 -- | degree to minutes
 --
 deg2min :: Double -> (Int, Double)
 deg2min x = let deg = truncate x :: Int
-                mi' = (abs $ x - fromIntegral deg) * 60.0
+                mi' = abs (x - fromIntegral deg) * 60.0
              in (deg, mi')
 {-# INLINE deg2min #-}
 --
@@ -72,7 +70,7 @@ interp2 xs ys zs (xd, yd)
           (iHere, xd') = inbetweenCyclic xsU xd
           (jHere, yd') = inbetweenFence  ysU yd      
 
-          (iHere0, iHere1, dx) | iHere == 0 = ((U.length xsU')-1, 0, x1 - x0)
+          (iHere0, iHere1, dx) | iHere == 0 = (U.length xsU' - 1, 0, x1 - x0)
                                | otherwise  = (iHere-1, iHere,
                                                 xsU' U.! iHere - xsU' U.! (iHere-1))
 
@@ -83,10 +81,10 @@ interp2 xs ys zs (xd, yd)
           a = (xd' - xsU U.! iHere) / dx
           b = (yd' - ysU U.! jHere) / dy
 
-          z0 = zs `index` (ix2 jHere0 iHere0)    -- UNSAFE's
-          z1 = zs `index` (ix2 jHere0 iHere1)
-          z2 = zs `index` (ix2 jHere1 iHere0)
-          z3 = zs `index` (ix2 jHere1 iHere1)
+          z0 = zs `index` ix2 jHere0 iHere0    -- UNSAFE's
+          z1 = zs `index` ix2 jHere0 iHere1
+          z2 = zs `index` ix2 jHere1 iHere0
+          z3 = zs `index` ix2 jHere1 iHere1
 
        in   a       * b       * z3
           + (1.0-a) * b       * z2
@@ -99,7 +97,7 @@ interp2 xs ys zs (xd, yd)
 ----
 -- [dummy, minl] = min(abs(ruler - here))
 closest :: (U.Unbox a, Num a, Ord a) => U.Vector a -> a -> Int
-closest ruler here = U.minIndex $ U.map (abs . (subtract here)) ruler
+closest ruler here = U.minIndex $ U.map (abs . subtract here) ruler
 {-# INLINE closest #-}
 
 -- | ruler should be sorted (but NOT checked)

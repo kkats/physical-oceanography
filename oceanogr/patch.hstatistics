@@ -1,15 +1,15 @@
-diff -ur hstatistics-0.2.5.2/hstatistics.cabal hstatistics-patched/hstatistics.cabal
---- hstatistics-0.2.5.2/hstatistics.cabal	2014-07-22 09:40:36.000000000 +0900
-+++ hstatistics-patched/hstatistics.cabal	2015-07-10 11:30:04.000000000 +0900
+diff -ur hstatistics-0.2.5.3/hstatistics.cabal hstatistics-patched/hstatistics.cabal
+--- hstatistics-0.2.5.3/hstatistics.cabal	2015-10-10 14:49:48.000000000 +0900
++++ hstatistics-patched/hstatistics.cabal	2016-08-23 11:50:11.912425132 +0900
 @@ -1,4 +1,4 @@
 -Name:               hstatistics
 +Name:               hstatistics-patched
- Version:            0.2.5.2
+ Version:            0.2.5.3
  License:            BSD3
  License-file:       LICENSE
-diff -ur hstatistics-0.2.5.2/lib/Numeric/Statistics/PCA.hs hstatistics-patched/lib/Numeric/Statistics/PCA.hs
---- hstatistics-0.2.5.2/lib/Numeric/Statistics/PCA.hs	2014-07-22 09:40:36.000000000 +0900
-+++ hstatistics-patched/lib/Numeric/Statistics/PCA.hs	2015-07-10 11:30:25.000000000 +0900
+diff -ur hstatistics-0.2.5.3/lib/Numeric/Statistics/PCA.hs hstatistics-patched/lib/Numeric/Statistics/PCA.hs
+--- hstatistics-0.2.5.3/lib/Numeric/Statistics/PCA.hs	2015-10-10 14:49:48.000000000 +0900
++++ hstatistics-patched/lib/Numeric/Statistics/PCA.hs	2016-08-23 11:52:06.356978335 +0900
 @@ -35,7 +35,7 @@
  --    the threshhold
  pca :: I.Array Int (Vector Double)    -- the data
@@ -18,7 +18,7 @@ diff -ur hstatistics-0.2.5.2/lib/Numeric/Statistics/PCA.hs hstatistics-patched/l
 +    -> ([Double], Matrix Double)
  pca d q = let d' = fmap (\x -> x - (scalar $ mean x)) d -- remove the mean from each dimension
                cv = covarianceMatrix d'
-               (val',vec') = eigSH cv           -- the covariance matrix is real symmetric
+               (val',vec') = eigSH $ trustSym cv -- the covariance matrix is real symmetric
 @@ -43,13 +43,14 @@
                vec = toColumns vec'
                v' = zip val vec
@@ -35,7 +35,7 @@ diff -ur hstatistics-0.2.5.2/lib/Numeric/Statistics/PCA.hs hstatistics-patched/l
 +     -> ([Double], Matrix Double)
  pcaN d n = let d' = fmap (\x -> x - (scalar $ mean x)) d -- remove the mean from each dimension
                 cv = covarianceMatrix d'
-                (val',vec') = eigSH cv           -- the covariance matrix is real symmetric
+                (val',vec') = eigSH $ trustSym cv  -- the covariance matrix is real symmetric
 @@ -57,7 +58,8 @@
                 vec = toColumns vec'
                 v' = zip val vec

@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, TypeOperators #-}
+{-# LANGUAGE TypeOperators #-}
 --
 -- | When filling an array with a shape (`Any` :. k), most of calculations
 --   for the last dimension (k) are common such that the matrix is filled in
@@ -25,7 +25,7 @@ computeP1 :: (Shape sh, Monad m, U.Unbox e)
             -> ((sh :. Int) -> Int -> U.Vector e) -- fn to process 1 chunk
             -> m (Array U (sh :. Int) e)
 computeP1 sh getVec
-    = now $ unsafePerformIO $ do mvec <- newMVec (size $ sh)
+    = now $ unsafePerformIO $ do mvec <- newMVec (size sh)
                                  loadP1 sh getVec mvec
                                  unsafeFreezeMVec sh mvec
 

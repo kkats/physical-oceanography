@@ -8,10 +8,11 @@ linear data analysis (EOF, low-pass filters, leastsquare fit), power spectra (PS
 parallel matrix computation (RepaExpand), and others (Misc).
 
 
+## gamma-n
+
+Calculate an approximation of the [neutral density](http://www.teos-10.org/preteos10_software/neutral_density.html) surfaces, *gamma-n* from measured temperature, salinity, and pressure.
+
 ## GSW
 
 Is now in a separate [repo](https://github.com/TEOS-10/GSW-Haskell.git) under [TEOS-10](https://github.com/TEOS-10).
 
-## gamma-n
-
-Calculate an approximation of the [neutral density](http://www.teos-10.org/preteos10_software/neutral_density.html) surfaces, *gamma-n* from measured temperature, salinity, and pressure.

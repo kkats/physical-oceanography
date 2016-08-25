@@ -30,7 +30,7 @@ nums    = many (oneOf "-.0123456789")
 comment = char '%' >> skipMany (noneOf "\n") >> return ""
 eol     = char '\n'
 
-parseSAM input = parse samFile "(unknown)" input
+parseSAM = parse samFile "(unknown)"
 
 ---
 --- Array

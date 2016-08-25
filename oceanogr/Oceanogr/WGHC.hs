@@ -3,6 +3,7 @@
 --
 module Oceanogr.WGHC (WGHC(..), readWGHCraw, wghc2bin,
                       longitude, latitude, depth) where
+import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Data.Array.Repa hiding (map, (++), Source)
@@ -184,9 +185,9 @@ readWGHCraw = do
                 Nothing -> return ()
                 Just s  -> if (Prelude.length . B.words) s == 4 -- 2D data
                              then do
-                                c <- read3D                     -- 3D data
-                                fillWGHCs s c
-                                sink
+                                  c <- read3D                   -- 3D data
+                                  fillWGHCs s c
+                                  sink
                              else sink
 
         read3D :: Consumer B.ByteString (ResourceT IO) [B.ByteString]
@@ -211,9 +212,8 @@ readWGHCraw = do
                                 e1 e2 e3 e4 e5 -- [5]
                                 l1 l2 l3 l4 l5
                                 v1 v2 v3 v4 v5 v6)
-                  = if isNaN (x + y + z)
-                      then return ()
-                      else let ijk = findGrid x longitude >>= \i0 -> -- Maybe monad
+                  = unless (isNaN (x + y + z))
+                         $ let ijk = findGrid x longitude >>= \i0 -> -- Maybe monad
                                      findGrid y latitude  >>= \j0 ->
                                      findGrid z depth     >>= \k0 ->
                                      return (i0, j0, k0)
@@ -325,17 +325,13 @@ fileRead = awaitForever $ \fname ->
     where
         loop h = do
             eof <- liftIO $ hIsEOF h
-            if eof
-                then return ()
-                else do
-                    l <- liftIO $ B.hGetLine h
-                    yield l
-                    loop h
+            unless eof
+               $ liftIO (B.hGetLine h) >>= yield >> loop h
 ---
 --- parser etc.
 --- 
 findGrid :: Float -> V.Vector Float -> Maybe Int
-findGrid z = V.findIndex (\x -> (abs $ x - z) < small)
+findGrid z = V.findIndex (\x -> abs (x - z) < small)
 
 prepstring :: B.ByteString -> B.ByteString
 prepstring s0 = let s1 = B.dropWhile isSpace s0
@@ -345,7 +341,7 @@ prepstring s0 = let s1 = B.dropWhile isSpace s0
                       else s2
 
 ff :: Float -> B.ByteString -> Float
-ff missing s0 = let x1 = either (\_ -> nan) double2Float (parseOnly double (prepstring s0))
+ff missing s0 = let x1 = either (const nan) double2Float (parseOnly double (prepstring s0))
                  in if (not . isNaN $ missing) && abs (x1 - missing) < eps
                       then nan
                       else x1
@@ -353,7 +349,7 @@ ff missing s0 = let x1 = either (\_ -> nan) double2Float (parseOnly double (prep
 fi :: B.ByteString -> Int
 fi s0 = let p :: Either String Int
             p = parseOnly (signed decimal) (prepstring s0)
-         in either (\_ -> 0) fromIntegral p
+         in either (const 0) fromIntegral p
 
 parseGrid :: B.ByteString -> [B.ByteString] -> [WGHC1]
 parseGrid header body

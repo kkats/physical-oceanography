@@ -8,11 +8,11 @@ import DSP.Filter.FIR.FIR    (fir)
 import DSP.Filter.IIR.Design (butterworthLowpass)
 import DSP.Window            (hamming)
 import Numeric.IEEE          (nan)
-import Numeric.LinearAlgebra (ident, sub, linearSolve)
+import Numeric.LinearAlgebra (ident, linearSolve)
 
-import qualified Data.Array          as A
-import qualified Data.Packed.Vector  as V
-import qualified Data.Packed.Matrix  as M
+import qualified Data.Array                 as A
+import qualified Numeric.LinearAlgebra.Data as V
+import qualified Numeric.LinearAlgebra.Data as M
 
 -- import Debug.Trace (trace)
 --
@@ -28,7 +28,7 @@ lpfFIR wsize input = let wsize' = if wsize `mod` 2 == 0 then wsize + 1
                          window'= hamming wsize'
                          window = fmap (/ (sum $ A.elems window')) window'
                          output = fir window input
-                      in (replicate l2 nan) ++ (drop wsize' output) ++ (replicate (l2+1) nan)
+                      in replicate l2 nan ++ drop wsize' output ++ replicate (l2+1) nan
 ---
 --- | IIR: Butterworth
 ---
@@ -43,7 +43,7 @@ lpfIIR :: Double -- ^ cutoff period
        -> (Int, [Double]) -- ^ (filter order, output)
 
 lpfIIR cutoff sampling s x
-    = let df = 1.0 / (sampling * (fromIntegral $ length x - 1))
+    = let df = 1.0 / (sampling * fromIntegral (length x - 1))
           wp = (1.0 / cutoff - 5 * df) / (1.0 / cutoff)
           ws = (1.0 / cutoff + 5 * df) / (1.0 / cutoff)
           f  = butterworthLowpass (wp, s) (ws, s)
@@ -53,9 +53,9 @@ lpfIIR cutoff sampling s x
           nfact = 3 * (nfilt - 1) -- length of edge transients
 
           -- extrapolated input (LL.86-90)
-          beg = map (\w -> 2 * (head x) - w) $ reverse
-                                             $ take nfact (tail x)
-          end = map (\w -> 2 * (last x) - w) $ take nfact (tail $ reverse x)
+          beg = map (\w -> 2 * head x - w) $ reverse
+                                            $ take nfact (tail x)
+          end = map (\w -> 2 * last x - w) $ take nfact (tail $ reverse x)
           x'  = beg ++ x ++ end
 
           -- initial condition
@@ -79,8 +79,8 @@ iir_df2t :: (A.Array Int Double, A.Array Int Double) -- ^ (b,a)
         -> [Double] -- ^ x[n]
         -> [Double] -- ^ y[n]
 
-iir_df2t (b,a) z x = iir'df2t (b,a) z' x
-    where z' = A.listArray (0, (m-1)) $ z ++ repeat 0
+iir_df2t (b,a) z = iir'df2t (b,a) z'
+    where z' = A.listArray (0, m-1) $ z ++ repeat 0
           m  = max (snd $ A.bounds b) (snd $ A.bounds a)
 
 iir'df2t :: (A.Array Int Double, A.Array Int Double) -> A.Array Int Double
@@ -104,16 +104,18 @@ lpfInit (b, a)
           an = A.bounds a 
           n  = 1 + max (snd bn - fst bn) (snd an - fst an)
           -- zero-padding (LL.72-73)
-          av = V.fromList $ A.elems a ++ replicate (n - (length $ A.elems a)) 0
-          bv = V.fromList $ A.elems b ++ replicate (n - (length $ A.elems b)) 0
+          av = V.fromList $ A.elems a ++ replicate (n - length (A.elems a)) 0
+          bv = V.fromList $ A.elems b ++ replicate (n - length (A.elems b)) 0
           -- matrices (LL.77-84)
           z1 = (n-1) M.>< (n-1) $
-               (map negate (V.toList $ V.subVector 1 (n-1) av))
-                 ++ (concat $ map (oneAt (n-1)) [1 .. (n-2)])
-          z2 = ident (n-1) `sub` (M.trans z1)
-          z3 = V.mapVector (* bv V.@> 0) (V.subVector 1 (n-1) av)
-          z4 = M.asColumn $ (V.subVector 1 (n-1) bv) `sub` z3
-       in linearSolve z2 z4
+               map negate (V.toList $ V.subVector 1 (n-1) av)
+                 ++ concatMap (oneAt (n-1)) [1 .. (n-2)]
+          z2 = ident (n-1) - M.tr z1
+          z3 = M.cmap (* (bv `M.atIndex` 0)) (V.subVector 1 (n-1) av)
+          z4 = M.asColumn $ V.subVector 1 (n-1) bv - z3
+       in case linearSolve z2 z4 of
+            Nothing -> error "lpfInit: lineaSolve failed"
+            Just a  -> a
 
 oneAt :: Int -> Int -> [Double] -- [0,0,1,0,..0] only n-th element is one
 oneAt len m = replicate (m-1) 0 ++ [1] ++ replicate (len-m) 0

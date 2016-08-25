@@ -26,7 +26,7 @@ dataFile :: FilePath
 dataFile = "/data/pub/ETOPO/ETOPO5.DOS" -- Little Endian, 16 byte Int
 
 dEtopo5 :: Double -- grid interval
-dEtopo5 = (1.0 / 12.0)
+dEtopo5 = 1.0 / 12.0
 
 readEtopo5 :: IO (Array U DIM2 Double, U.Vector Double, U.Vector Double)
 readEtopo5 = do
@@ -45,7 +45,7 @@ parser :: Get a -> Get [a]
 parser getf = do
     ie <- isEmpty
     if ie then return []
-          else (:) <$> getf <*> (parser getf)
+          else (:) <$> getf <*> parser getf
 
 
 readVecI16le :: FilePath -> IO (U.Vector Double)
