@@ -8,6 +8,8 @@ module Oceanogr.EOF (
 where
 import Data.Array.Repa as Repa hiding ((++))
 
+import Oceanogr.Statistics           (pca, pcaTransform)
+
 import qualified Data.Array.IArray           as A
 import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Unboxed.Mutable as M
@@ -18,7 +20,6 @@ import Data.Packed.Repa                 (repaToVector, matrixToRepa)
 import GHC.Float                        (float2Double, double2Float)
 import Numeric.IEEE                     (nan)
 -- import Numeric.GSL.Statistics           (variance)
-import Numeric.Statistics.PCA           (pca, pcaTransform)
 
 -- import Text.Printf                      (printf)
 -- import Debug.Trace (trace)

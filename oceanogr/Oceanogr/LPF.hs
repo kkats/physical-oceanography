@@ -115,7 +115,7 @@ lpfInit (b, a)
           z4 = M.asColumn $ V.subVector 1 (n-1) bv - z3
        in case linearSolve z2 z4 of
             Nothing -> error "lpfInit: lineaSolve failed"
-            Just a  -> a
+            Just c  -> c
 
 oneAt :: Int -> Int -> [Double] -- [0,0,1,0,..0] only n-th element is one
 oneAt len m = replicate (m-1) 0 ++ [1] ++ replicate (len-m) 0
@@ -130,7 +130,7 @@ testLPF = do
     c <- readFile "tmp/a.dat" --- random numbers
     let input = map (\r -> read r:: Double) $ lines  c
     return $ lpfIIR 10 1 0.05 input
-           -- in lpfFIR 5 input :: [Double]
+          -- in lpfFIR 5 input :: [Double]
 
 testInit :: IO ()
 testInit = do

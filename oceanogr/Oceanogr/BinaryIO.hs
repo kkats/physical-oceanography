@@ -45,9 +45,6 @@ readVecI fname = do
     buf <- B.readFile fname
     return $ U.fromList $ runGet (parser getInt32be) buf
 
-getInt32be :: Get Int32
-getInt32be = getWord32be >>= \x -> return (fromIntegral x::Int32)
-
 parser :: Get a -> Get [a] -- read until EOF
 parser getf = do
     ie <- isEmpty

@@ -3,11 +3,14 @@
 --
 module Oceanogr.LeastSquare (lsFit2, lsFit2dangerous, lsFit3, lsFit1) where
 import Numeric.Statistics                 (ols)
-import Numeric.LinearAlgebra              ((<>), diagRect, tr)
+import Numeric.LinearAlgebra              ((<>), diagRect, tr, Matrix, (><))
 import Numeric.LinearAlgebra.Data         (fromList, fromLists, toLists, atIndex)
 import Numeric.LinearAlgebra              (inv, chol, sym)
 import Statistics.Distribution            (complCumulative)
 import Statistics.Distribution.ChiSquared (chiSquared)
+
+import Oceanogr.Statistics (olsD)
+
 -- import Debug.Trace (trace)
 
 -- | Least squares fit with one parameter
@@ -25,7 +28,7 @@ lsFit1 y'' x1'' w'' =
              w2 = inv . chol $ w
              x' = w2 <> x
              y' = w2 <> y
-             (b, _, chi2) = ols x' y'
+             (b, _, chi2) = olsD x' y'
              dof = length y'' - 1 -- no error check for dof<0
              -- dof = trace (show chi2)((length y'') - 2)
              chi2' = (chi2 `atIndex` (0,0)) * fromIntegral dof -- already divided by dof
@@ -48,7 +51,7 @@ lsFit2 y'' x1'' w'' =
              w2 = inv . chol $ w
              x' = w2 <> x
              y' = w2 <> y
-             (b, _, chi2) = ols x' y'
+             (b, _, chi2) = olsD x' y'
              dof = length y'' - 2 -- no error check for dof<0
              -- dof = trace (show chi2)((length y'') - 2)
              chi2' = (chi2 `atIndex` (0,0)) * fromIntegral dof -- already divided by dof
@@ -65,7 +68,7 @@ lsFit2dangerous y'' x1'' _ =
     then error "lsFit2()dangerous: inconsistent input"                                 
     else let y = tr $ fromLists [y'']                                      
              x = fromLists $ map (\(p,q) -> [p, q]) $ zip x1'' (repeat 1.0)   
-             (b, _, chi2) = ols x y
+             (b, _, chi2) = olsD x y
              dof = length y'' - 2 -- no error check for dof<0               
              chi2' = chi2 `atIndex` (0,0)
              pval = complCumulative (chiSquared dof) chi2'
@@ -89,17 +92,17 @@ lsFit3 y x1 x2 w =
              w2 = inv . chol $ w0
              x' = w2 <> x0
              y' = w2 <> y0
-             (b, _, chi2) = ols x' y'
+             (b, _, chi2) = olsD x' y'
              dof = length y - 2 -- no error check for dof<0
              chi2' = (chi2 `atIndex` (0,0)) * fromIntegral dof -- already divided by dof
              pval = complCumulative (chiSquared dof) chi2'
          in  (toLists b, chi2 `atIndex` (0,0), pval)
 
 
+{-
 ---
 --- tests
 ---
-{-
 weightTest :: (Matrix Double, Double)
 weightTest =
     let y = (3 >< 1) [-2.32, 12.3, -9.9] -- (3 >< 1) [1.17, 2.3, 3.23]
@@ -107,13 +110,13 @@ weightTest =
                        [0.0, 1.0],
                        [1.0, 1.0]]
         -- weight
-        w = diagRect 0.0 (fromList [0.1, 1.0, 0.4]) 3 3
+        w = sym $ diagRect 0.0 (fromList [0.1, 1.0, 0.4 :: Double]) 3 3
         -- Cholesky
         w2 = inv . chol $ w
         x' = w2 <> x
         y' = w2 <> y
         -- (b <unscaled>, r <scaled>, chi2 <scaled=to be used in the test i.e. NR(15.2.2))
-        (b, r, chi2) = ols x' y'
+        (b, r, chi2) = olsD x' y'
         dof = 3 - 2
     in  (b, complCumulative (chiSquared dof) $ chi2 `atIndex` (0,0))
 
@@ -123,6 +126,6 @@ simpleTest =
         x = fromLists [[-1.0, 1.0],
                        [0.0, 1.0],
                        [1.0, 1.0]]
-    in ols x y
+    in olsD x y
 -- "rows are observations, columns are elements"
 -}

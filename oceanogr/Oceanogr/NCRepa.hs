@@ -98,7 +98,7 @@ getChar info varname
 --
 -- Variable may not exist
 --
-getRealAvail :: forall sh a. (Shape sh, Real a, FromNcAttr a, NcStorable a, IEEE a)
+getRealAvail :: forall sh a. (Shape sh, FromNcAttr a, NcStorable a, IEEE a)
                         => NcInfo NcRead -> String -> IO (Maybe (Array F sh a))
 getRealAvail info varname
     = case ncVar info varname of
@@ -127,7 +127,7 @@ mycoardsScale v = Data.NetCDF.Store.smap xform
                                 then nan
                                 else realToFrac $ realToFrac x * scale + offset
 
-mycoardsScale1 :: forall a b. (NcStorable a, NcStorable b, FromNcAttr a, FromNcAttr b,
+mycoardsScale1 :: forall a b. (FromNcAttr a, FromNcAttr b,
                                 Real a, Fractional b, IEEE b)
                 => NcVar -> a -> b
 mycoardsScale1 v x = case fill of
@@ -139,7 +139,7 @@ mycoardsScale1 v x = case fill of
 
 
 
-triplet :: forall a b. (NcStorable a, NcStorable b, FromNcAttr a, FromNcAttr b,
+triplet :: forall a b. (FromNcAttr a, FromNcAttr b,
                         Fractional b) => NcVar -> (b, b, Maybe a)
 triplet v = (offset, scale, fill)
   where offset = fromMaybe 0.0 $ ncVarAttr v "add_offset"   >>= fromAttr

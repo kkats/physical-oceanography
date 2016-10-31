@@ -38,9 +38,6 @@ readEtopo5 = do
     return (topo, U.fromList lon, U.fromList lat)
 
 -- IO
-getInt16le :: Get Int16
-getInt16le = fromIntegral <$> getWord16le
-
 parser :: Get a -> Get [a]
 parser getf = do
     ie <- isEmpty
