@@ -8,7 +8,7 @@
 module Oceanogr.BinaryIO (
     -- * Vectors
     readVecF, readVecI, writeVecF, appendVecF,
-    -- * Repa matrices
+    -- * Repa matrices -- no longer supported
     readMatF, writeMatF)
 where
 import qualified Data.ByteString.Lazy as B
@@ -65,52 +65,9 @@ appendVecF fname v = do
 
 -- | read a Repa matrix in BigEndian
 readMatF :: forall sh. (Shape sh) => FilePath -> sh -> IO (Array F sh Float)
-readMatF fname sh =
-    if sizeOf (undefined :: Word32) /= sizeOf (undefined :: Float)
-      then do
-        hPutStrLn stderr "readMatF :: cannot convert Word32 <-> Float -- using native endian" 
-        readArrayFromStorableFile fname sh
-      else do
-        src <- readArrayFromStorableFile fname sh :: IO (Array F sh Word32)
-
-        let ptr    = toForeignPtr src
-
-        withForeignPtr ptr (\p -> inPlaceEndianSwap p (size sh))
-        return $ fromForeignPtr sh (castForeignPtr ptr :: ForeignPtr Float)
+readMatF fname sh = hPutStrLn stderr "readMatF is no longer supported. Rewrite to use readVecF instead\n"
+                 >> readArrayFromStorableFile fname sh
 
 --- | write a Repa matrix in BigEndian
 writeMatF :: forall sh. (Shape sh) => FilePath -> Array U sh Float -> IO ()
-writeMatF fname arr =
-    if sizeOf (undefined :: Word32) /= sizeOf (undefined :: Float)
-      then do
-        hPutStrLn stderr "write :: cannot convert Word32 <-> Float -- using native endian" 
-        writeArrayToStorableFile fname arr
-      else do
-
-        -- after Data.Array.Repa.IO.Binary.writeArrayToStorableFile
-        let bytes1      = sizeOf (arr ! zeroDim)
-        let bytesTotal  = bytes1 * size (extent arr)
-        
-        buf  <- mallocBytes bytesTotal :: IO (Ptr Float)
-        fptr <- newForeignPtr finalizerFree buf        
-        computeIntoP fptr (delay arr)
-
-        withForeignPtr (castForeignPtr fptr :: ForeignPtr Word32)
-                         (\p -> inPlaceEndianSwap p (size $ extent arr))
-        
-        h <- openBinaryFile fname WriteMode
-        hPutBuf h buf bytesTotal 
-        hClose h
-
-
--- after http://d.hatena.ne.jp/kazu-yamamoto/20131225/1387938629
-inPlaceEndianSwap :: Ptr Word32
-                   -> Int  -- ^ #  of Floats, NOT # of bytes
-                   -> IO ()
-inPlaceEndianSwap _   0 = return ()
-inPlaceEndianSwap ptr n = do
-    f <- peek ptr
-    poke ptr (toBigEndian f)
-
-    inPlaceEndianSwap (ptr `plusPtr` sizeOf (undefined :: Word32)) (n - 1)
-                -- function binding is stronger than backticked infix function
+writeMatF fname arr = hPutStrLn stderr "writeMatF is no longer supported. Rewrite to use writeVecF instead\n"

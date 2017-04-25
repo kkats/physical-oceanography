@@ -1,6 +1,6 @@
 -- |
 --
--- "/The file may be thought of as having a logical record size of 
+-- /"The file may be thought of as having a logical record size of 
 --  8640 bytes.  The data start at the North Pole (90 deg N, 0 deg 0'E)
 --  and are arranged in bands of 360 degrees x 12 points\/degree
 --  = 4320 values (8640 bytes) ranging eastward from 0 deg 0' East 
@@ -18,7 +18,6 @@ import Data.Binary.Get
 import qualified Data.Vector.Unboxed as U
 import qualified Data.ByteString.Lazy as B
 import Control.Applicative ((<$>), (<*>))
-import Data.Int (Int16)
 
 -- import Text.Printf (printf)
 

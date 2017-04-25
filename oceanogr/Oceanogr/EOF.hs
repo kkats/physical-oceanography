@@ -8,7 +8,7 @@ module Oceanogr.EOF (
 where
 import Data.Array.Repa as Repa hiding ((++))
 
-import Oceanogr.Statistics           (pca, pcaTransform)
+import Numeric.Statistics.PCA (pca, pcaTransform)
 
 import qualified Data.Array.IArray           as A
 import qualified Data.Vector.Unboxed         as U
@@ -54,9 +54,10 @@ doEOF input nmodes = do
 
         -- let's go
         -- (v, c') = pcaN arr nmodes -- error in total variance
-        (v, c') = pca arr 0
+        (v', c') = pca arr 0
         s' = pcaTransform arr c'
         c  = matrixToRepa c'
+        v  = V.toList v'
 
     -- output
     buf <- M.replicate (ns * nmodes) nan :: IO (M.IOVector Float)
@@ -100,7 +101,7 @@ doEOFeigOnly input
                                   $ slice input (Z :. All :. oivec U.! (n-1)))
                                         | n <- [1 .. nocean]]
         (v, _) = pca arr 0
-     in v
+     in V.toList v
 
 {-
     let a = A.array (1,3) [(1,a1), (2,a2), (3,a3)]

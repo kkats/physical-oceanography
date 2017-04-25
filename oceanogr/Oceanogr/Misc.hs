@@ -9,12 +9,13 @@ module Oceanogr.Misc
              nanmean,
              nanvar,
              nansum,
+             nanmean2,
              findRange,
              findRange'
             )
 where
 import Data.Array.Repa
--- import Data.Array.Repa.Eval (Target(..))
+import Numeric.IEEE (nan, IEEE)
 
 import qualified Data.Vector.Unboxed as U
 
@@ -44,6 +45,13 @@ nanvar xs = let xs' = filter (not . isNaN) xs
                 n   = fromIntegral (length xs')
              in sum (Prelude.map (^(2::Integer)) xs') / n - (sum xs' / n)^(2::Integer)
 {-# INLINE nanvar #-}
+nanmean2 :: (RealFloat a, IEEE a) => a -> a -> a
+nanmean2 a b
+    | not (isNaN a) && isNaN b = a
+    | isNaN a && not (isNaN b) = b
+    | isNaN a && isNaN b       = nan
+    | otherwise                = (a + b) * 0.5
+{-# INLINE nanmean2 #-}
 --
 -- | degree to minutes
 --
@@ -56,7 +64,7 @@ deg2min x = let deg = truncate x :: Int
 -- | Linear interpolation in 2D
 --   cyclic in Lon, fenced in Lat
 --
-interp2 :: (Source r e, Num e, U.Unbox e, Fractional e, Ord e, Show e)
+interp2 :: (Source r e, U.Unbox e, Fractional e, Ord e, Show e)
         => Array U DIM1 e  -- ^ src x | Dim 2
         -> Array U DIM1 e  -- ^ src y | Dim 1
         -> Array r DIM2 e  -- ^ src z | (y, x)
@@ -66,12 +74,13 @@ interp2 xs ys zs (xd, yd)
     = let xsU'= toUnboxed xs
           x0  = xsU' U.! 0; x1 = xsU' U.! 1
           xsU = U.cons (2 * x0 - x1) xsU' -- extend to the left to make cyclic
+                                          -- i.e. iHere is incremented by 1 (***)
           ysU = toUnboxed ys
           (iHere, xd') = inbetweenCyclic xsU xd
           (jHere, yd') = inbetweenFence  ysU yd      
 
           (iHere0, iHere1, dx) | iHere == 0 = (U.length xsU' - 1, 0, x1 - x0)
-                               | otherwise  = (iHere-1, iHere,
+                               | otherwise  = (iHere-1, iHere,              -- (***)
                                                 xsU' U.! iHere - xsU' U.! (iHere-1))
 
           (jHere0, jHere1, dy) | jHere == U.length ysU - 1 = (jHere, jHere, 1.0)

@@ -17,7 +17,8 @@
 #  location: "./custom-snapshot.yaml"
 #resolver: lts-6.10
 #resolver: nightly-2016-08-31
-resolver: lts-7.01
+#resolver: lts-7.01
+resolver: lts-8.12
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -40,22 +41,11 @@ resolver: lts-7.01
 packages:
 - oceanogr/
 - gamma-n/
-# hmatrix-repa-0.1.2.2
-- location:
-    git:    https://github.com/amcphail/hmatrix-repa.git
-    commit: f76c21b59dde938e836afb4bec230e1b69eafd56
-# hnetcdf-0.3.0.1
-- location:
-    git:    https://github.com/kkats/hnetcdf.git
-    commit: 36b2d85f924564a0b30f8a559a367e18014d8ea8
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 #extra-deps: []
 extra-deps:
-- data-endian-0.1.1
-- dsp-0.2.3.1
-- repa-3.4.1.1
-- repa-io-3.4.1.1
+- hnetcdf-0.4.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}

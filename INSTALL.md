@@ -4,20 +4,7 @@
 
 The [GNU Scientific Library](https://www.gnu.org/software/gsl/gsl.html) must be installed in your system.
 
-Download source package of [hstatistics](https://hackage.haskell.org/package/hstatistics).  Tested with version 0.2.5.3 but should work as far as Numeric.Statistics.PCA is not drastically modified. Expand it at the same directory as oceanogr.cabal.
-
-    % cd oceanogr
-    % tar xvfz $(DOWNLOAD)/hstatistics-0.2.5.3.tar.gz
-
-Apply patch.hstatistics and install right away
-
-    % mv hstatistics-0.2.5.3 hstatistics-patched
-    % cd hstatistics-patched
-    % patch -p1 < ../patch.hstatistics
-    % mv hstatistics.cabal hstatistics-patched.cabal
-    % stack install hstatistics-patched
-
-As of 25 Aug 2016, patches are necessary for [hnetcdf](https://github.com/ian-ross/hnetcdf) and [hmatrix-repa](https://github.com/amcphail/hmatrix-repa). See stack.yaml for detail.
+    % stack build
 
 ## gamma-n
 
