@@ -35,7 +35,7 @@ findRange' ruler (low, high)
 --
 -- | NaN's
 --
-nanmean, nansum, nanvar :: (RealFloat a) => [a] -> a
+nanmean, nansum, nanvar :: (RealFloat a, IEEE a) => [a] -> a
 nansum xs = sum $ filter (not . isNaN) xs
 {-# INLINE nansum #-}
 nanmean xs = let xs' = filter (not . isNaN) xs
@@ -43,7 +43,9 @@ nanmean xs = let xs' = filter (not . isNaN) xs
 {-# INLINE nanmean #-}
 nanvar xs = let xs' = filter (not . isNaN) xs
                 n   = fromIntegral (length xs')
-             in sum (Prelude.map (^(2::Integer)) xs') / n - (sum xs' / n)^(2::Integer)
+             in if n == 1
+                 then nan  -- variance not defined
+                 else sum (Prelude.map (^(2::Integer)) xs') / n - (sum xs' / n)^(2::Integer)
 {-# INLINE nanvar #-}
 nanmean2 :: (RealFloat a, IEEE a) => a -> a -> a
 nanmean2 a b
