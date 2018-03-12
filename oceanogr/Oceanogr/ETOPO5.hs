@@ -13,11 +13,11 @@
 --        <http://www.ngdc.noaa.gov/mgg/global/relief/ETOPO5/TOPO/ETOPO5/ETOPO5.txt>
 --
 module Oceanogr.ETOPO5 (readEtopo5, dEtopo5) where
+
+import Oceanogr.BinaryIO (readVecI16le)
+
 import Data.Array.Repa hiding (map)
-import Data.Binary.Get
 import qualified Data.Vector.Unboxed as U
-import qualified Data.ByteString.Lazy as B
-import Control.Applicative ((<$>), (<*>))
 
 -- import Text.Printf (printf)
 
@@ -31,27 +31,10 @@ readEtopo5 :: IO (Array U DIM2 Double, U.Vector Double, U.Vector Double)
 readEtopo5 = do
     topo' <- readVecI16le dataFile
     let topo = fromUnboxed (ix2 2160 4320) topo'
-        lat = map ((* dEtopo5) . i2d) $ reverse $ tail ([(-90*12) .. (90*12)]::[Integer]) -- first is redundant
-        lon = map ((* dEtopo5) . i2d) $ init ([(0*12) .. (360*12)]::[Integer])  -- last is redundant
+        lat = map ((* dEtopo5) . fromIntegral) $ reverse $ tail ([(-90*12) .. (90*12)]::[Integer]) -- first is redundant
+        lon = map ((* dEtopo5) . fromIntegral) $ init ([(0*12) .. (360*12)]::[Integer])  -- last is redundant
 
     return (topo, U.fromList lon, U.fromList lat)
-
--- IO
-parser :: Get a -> Get [a]
-parser getf = do
-    ie <- isEmpty
-    if ie then return []
-          else (:) <$> getf <*> parser getf
-
-
-readVecI16le :: FilePath -> IO (U.Vector Double)
-readVecI16le fname = do
-    buf <- B.readFile fname
-    let fvec = map i2d $ runGet (parser getInt16le) buf
-    return $ U.fromList fvec
-
-i2d :: (Integral a) => a -> Double
-i2d i = fromIntegral i :: Double
 
 
 {-

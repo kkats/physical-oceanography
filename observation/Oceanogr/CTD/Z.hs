@@ -31,6 +31,8 @@ zOnP' item ctd
                        in if V.null y then error "SA empty" else y
                 DO -> let y = ctdDO ctd
                        in if V.null y then error "DO empty" else y
+                PT -> let y = ctdPT ctd
+                       in if V.null y then error "PT empty" else y
                 --
                 T  -> let y = ctdT ctd
                        in if V.null y then error "T empty" else y
@@ -90,7 +92,7 @@ cleansen x dx
 -- internal worker
 gOnP_ :: CTDdata -> IO ([Double], [Double], [Double], [Double], [Double]) -- (p,g,t,s,o)
 gOnP_ ctd = do
-    let CTDdata stn p' t' s' o' _ _ = ctd
+    let CTDdata stn p' t' s' o' _ _ _ = ctd
         here         = (float2Double $ stnLongitude stn,
                         float2Double $ stnLatitude stn)
         (p, t, s, o) = V.unzip4

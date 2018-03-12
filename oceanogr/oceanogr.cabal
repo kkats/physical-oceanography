@@ -10,7 +10,7 @@ name:                oceanogr
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.2.1.0
+version:             0.2.1.1
 
 -- A short (one-line) description of the package.
 -- synopsis:            
@@ -56,7 +56,7 @@ library
                        Oceanogr.LeastSquare,
                        Oceanogr.NCRepa,
                        Oceanogr.PSD,
-                       Oceanogr.LPF,
+                       Oceanogr.LPF
                        Oceanogr.WGHC
   
   -- Modules included in this library but not exported.
@@ -70,13 +70,16 @@ library
   build-depends:       base,
                        array,
                        attoparsec,
-                       binary,
                        bytestring,
                        carray,
+                       cereal,
+                       cereal-conduit,
                        conduit,
+                       conduit-extra,
+                       conduit-combinators,
                        data-endian,
                        data-binary-ieee754,
-                    　 dsp,
+                       dsp,
                        filepath,
                        fft,
                        hmatrix,

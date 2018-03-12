@@ -1,73 +1,78 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Rank2Types #-}
 ---- $Id: BinaryIO.hs,v 1.1 2015/01/05 04:48:43 ka Exp ka $ --
 -- 
 -- | With no reasons, I prefer Big Endian to Little Endian.
 --   For interfacing with GrADS, float (4 byte) for floating point numbers.
 --   Int32 (4 byte) is used for integral numbers.
 --
-module Oceanogr.BinaryIO (
-    -- * Vectors
-    readVecF, readVecI, writeVecF, appendVecF,
-    -- * Repa matrices -- no longer supported
-    readMatF, writeMatF)
+module Oceanogr.BinaryIO (readVecF, readVecI16le, writeVecF, appendVecF)
 where
-import qualified Data.ByteString.Lazy as B
-import qualified Data.Vector.Unboxed as U
 
-import Data.Array.Repa
-import Data.Array.Repa.IO.Binary
-import Data.Array.Repa.Repr.ForeignPtr
+import Control.Monad.Trans.Resource (runResourceT, MonadResource)
+import Data.Conduit                 (runConduit, (.|), Consumer)
+import Data.Conduit.Binary          (sourceFile, sinkIOHandle)
+import Data.Conduit.Combinators     (sinkVector, yieldMany, sinkFile)
+import Data.Conduit.Cereal          (conduitGet2, conduitPut)
 
-import Foreign.Storable (sizeOf, peek, poke)
-import Foreign.ForeignPtr (ForeignPtr, withForeignPtr, castForeignPtr, newForeignPtr)
-import Foreign.Marshal.Alloc (finalizerFree, mallocBytes)
-import Foreign.Ptr (plusPtr, Ptr)
-import Data.Endian (toBigEndian)
--- import System.Endian (toBE32)
+import Data.Serialize.Get (getInt16le, getInt32be)
+import Data.Serialize.IEEE754   (getFloat32be, putFloat32be)
+import qualified Data.Vector.Unboxed as V
 
-import Control.Applicative ((<$>), (<*>))
-import Data.Binary.Get
-import Data.Binary.Put
-import Data.Binary.IEEE754
-import Data.Int
-import Data.Word (Word32)
--- import Foreign.C (CFloat)
-import System.IO
+import qualified Data.ByteString as B
+import qualified System.IO as IO
 
--- | read until EOF
-readVecF :: FilePath -> IO (U.Vector Float)
-readVecF fname = do
-    buf <- B.readFile fname
-    return $ U.fromList $ runGet (parser getFloat32be) buf
+-- sinkVector :: (MonadBase base m, Vector v a, PrimMonad base)  => forall o. ConduitM a o m (v a)
+--              instance PrimMonad IO
+--              instance MonadBase IO IO, instance MonadBase IO (ResourceT IO)
+--              instance Vector Vector Float
+-- conduitGet2 :: MonadThrow m => Get o -> ConduitM ByteString o m ()
+--              instance MonadThrow IO
+-- sourceFile :: MonadResource m => FilePath -> forall i. ConduitM i ByteString m ()
+--              instance (MonadThrow m, MonadBase IO m, MonadIO m, Applicative m)
+--                                                              => MonadResource (ResourceT m)
+-- runConduit :: Monad m => ConduitM () Void m r -> m r
+-- runResourceT :: MonadBaseControl IO m => ResourceT m a -> m a
+--
+readVecF :: FilePath -> IO (V.Vector Float)
+readVecF fname = let go = sourceFile fname .| conduitGet2 getFloat32be .| sinkVector
+                    -- go :: ConduitM () Void (ResourceT IO) (Vector Float)
+                  in runResourceT $ runConduit go
 
-readVecI :: FilePath -> IO (U.Vector Int32)
+readVecI :: FilePath -> IO (V.Vector Int)
 readVecI fname = do
-    buf <- B.readFile fname
-    return $ U.fromList $ runGet (parser getInt32be) buf
+        ivec <- runResourceT $ runConduit $ sourceFile fname
+                                                .| conduitGet2 getInt32be
+                                                .| sinkVector
+        return (V.map fromIntegral ivec)
 
-parser :: Get a -> Get [a] -- read until EOF
-parser getf = do
-    ie <- isEmpty
-    if ie then return []
-          else (:) <$> getf <*> parser getf
 
--- | write a vector
-writeVecF :: FilePath -> U.Vector Float -> IO ()
-writeVecF fname v = do
-    B.writeFile fname $ runPut (mapM_ putFloat32be (U.toList v)) -- float
-    -- B.writeFile fname $ runPut (mapM_ putFloat64be (U.toList v)) -- double
-    return ()
+readVecI16le :: FilePath -> IO (V.Vector Double)
+readVecI16le fname = do
+        ivec <- runResourceT $ runConduit $ sourceFile fname
+                                                .| conduitGet2 getInt16le
+                                                .| sinkVector
+        return (V.map fromIntegral ivec)
 
-appendVecF :: FilePath -> U.Vector Float -> IO ()
-appendVecF fname v = do
-    B.appendFile fname $ runPut (mapM_ putFloat32be (U.toList v))
-    return ()
+-- yieldMany :: (Monad m, MonoFoldable mono) => mono -> forall i. ConduitM i (Element mono) m
+--              instance MonoFoldable (Vector a)
+--              type family Element mono; type instance Element (Vector a) = a
+-- conduitPut :: Monad m => Putter a -> ConduitM a ByteString m
+-- type Putter a = a -> Put
+-- putFloat32be :: Float -> Put
+-- sinkFile :: MonadResource m => FilePath -> forall o. ComduitM ByteString o m ()
+--
+writeVecF :: FilePath -> V.Vector Float -> IO ()
+writeVecF fname v = let go = yieldMany v .| conduitPut putFloat32be .| sinkFile fname
+                     in runResourceT $ runConduit go
 
--- | read a Repa matrix in BigEndian
-readMatF :: forall sh. (Shape sh) => FilePath -> sh -> IO (Array F sh Float)
-readMatF fname sh = hPutStrLn stderr "readMatF is no longer supported. Rewrite to use readVecF instead\n"
-                 >> readArrayFromStorableFile fname sh
+-- slight modification of Data.Conduit.Binary.sinkFile
+sinkFileByAppend :: MonadResource m => FilePath -> Consumer B.ByteString m ()
+sinkFileByAppend fname = sinkIOHandle (IO.openBinaryFile fname IO.AppendMode)
 
---- | write a Repa matrix in BigEndian
-writeMatF :: forall sh. (Shape sh) => FilePath -> Array U sh Float -> IO ()
-writeMatF fname arr = hPutStrLn stderr "writeMatF is no longer supported. Rewrite to use writeVecF instead\n"
+appendVecF :: FilePath -> V.Vector Float -> IO ()
+appendVecF fname  v = let go = yieldMany v .| conduitPut putFloat32be .| sinkFileByAppend fname
+                       in runResourceT $ runConduit go
+
+-- obsolete
+-- readMatF :: forall sh. (Shape sh) => FilePath -> sh -> IO (Array F sh Float)
+-- writeMatF :: forall sh. (Shape sh) => FilePath -> Array U sh Float -> IO ()

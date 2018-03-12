@@ -4,12 +4,12 @@
 --
 module Oceanogr.CTD (
 Cast, Station(..), CTDdata(..), CTDitem(..), CTDfileRead(..),
-readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA,
+readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
 findCommon, findCTDfromCast, findIdxfromCast, sf, si, formTime
 ) where
 
 import Oceanogr.GSW (gsw_distance, putLoc)
-import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp)
+import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sigma0)
 
 import qualified Data.ByteString.Char8       as B
 import qualified Data.Vector.Unboxed         as V
@@ -53,10 +53,11 @@ data CTDdata = CTDdata {
              ctdS       :: V.Vector Float,
              ctdDO      :: V.Vector Float,
              ctdCT      :: V.Vector Float,
-             ctdSA      :: V.Vector Float
+             ctdSA      :: V.Vector Float,
+             ctdPT      :: V.Vector Float
             } deriving (Show)
 
-data CTDitem = P | T | S | DO | CT | SA
+data CTDitem = P | T | S | DO | CT | SA | PT
 
 --
 -- How to read CTD files
@@ -140,28 +141,47 @@ readCTD fname a = do
 
     when (V.null pres_ || V.null temp_ || V.null salt_) $ error "Empty P/T/S?"
 
-    return $ CTDdata station pres_ temp_ salt_ doxy_ V.empty V.empty
+    return $ CTDdata station pres_ temp_ salt_ doxy_ V.empty V.empty V.empty
 
 --
--- Conservative Temperature and Absolute Salinity
+-- Conservative Temperature and Absolute Salinity, as well as potential temperature
 --
 addCTSA :: CTDdata -> IO CTDdata
 addCTSA ctd = do
-    let CTDdata stn p t s o _ _ = ctd
+    let CTDdata stn p t s o _ _ _ = ctd
         here                    = (float2Double . stnLongitude $ stn,
                                    float2Double . stnLatitude  $ stn)
-        conv :: Float -> Float -> Float -> IO (Float, Float)
+        conv :: Float -> Float -> Float -> IO (Float, Float, Float)
         conv p3 t3 s3
-          | isNaN (p3 + t3 + s3) = return (nan, nan)
+          | isNaN (p3 + t3 + s3) = return (nan, nan, nan)
           | otherwise            = do
             sa3 <- uncurry (gsw_sa_from_sp (float2Double s3) (float2Double p3)) here
             ct3 <- gsw_ct_from_t sa3 (float2Double t3) (float2Double p3)
-            return (double2Float ct3, double2Float sa3)
+            pt3 <- gsw_pt_from_ct sa3 ct3
+            return (double2Float ct3, double2Float sa3, double2Float pt3)
 
-    (ct, sa) <- V.unzip `fmap` V.mapM (\(p4,t4,s4) -> conv p4 t4 s4) (V.zip3 p t s)
+    (ct, sa, pt) <- V.unzip3 `fmap` V.mapM (\(p4,t4,s4) -> conv p4 t4 s4) (V.zip3 p t s)
 
-    return $ CTDdata stn p t s o ct sa
-            
+    return $ CTDdata stn p t s o ct sa pt
+
+--
+-- Convert DO unit from mL/L -> umol/kg
+-- requires SA and CT
+--
+-- 1 mL = 0.001 L = 0.001 / 22.4 mol = 1000 / 22.4 umol
+--
+convDOunit :: CTDdata -> IO CTDdata
+convDOunit ctd = do
+    let CTDdata stn' p' t' s' d ct' sa' pt' = ctd
+        conv :: Float -> Float -> Float -> IO (Float)
+        conv d3 ct3 sa3
+          | isNaN (d3 + ct3 + sa3) = return nan
+          | otherwise              = do
+                s0 <- gsw_sigma0 (float2Double sa3) (float2Double ct3)
+                return $ (d3 * 1000 / 22.4) * 1000 / (1000 + double2Float s0)
+    d0 <- V.mapM (\(d4,ct4,sa4) -> conv d4 ct4 sa4) (V.zip3 d ct' sa')
+
+    return $ CTDdata stn' p' t' s' d0 ct' sa' pt'
 --
 -- From given CTD data and station list, produce a section
 --
