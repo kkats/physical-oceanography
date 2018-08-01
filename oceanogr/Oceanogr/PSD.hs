@@ -138,8 +138,7 @@ psdvel ns nb u' v' = do
 
     pow'' <- forM [1 .. ns] $ \i -> let (uin, _) = slicer ns i u
                                         (vin, _) = slicer ns i v
-                                     -- in psdWindowVel (detrend uin) (detrend vin)
-                                     in psdWindowVel uin vin
+                                     in psdWindowVel (detrend uin) (detrend vin)
 
     (ke'', cw'', ccw'') <- unzip3 `fmap` (forM [0 .. (k2-1)] $ \i -> do
                         (ke2, cw2, ccw2) <- unzip3 `fmap` forM [1 .. ns] (\j ->
@@ -161,7 +160,6 @@ psdvel ns nb u' v' = do
         cc       = ci nb ns ((VU.length u - nz) `div` ns) nz
 
     return (ff, ke, cw, ccw, cc)
-
 
 -- | use least squares fit to detrend
 detrend :: VU.Vector Double -> VU.Vector Double
@@ -205,8 +203,8 @@ psdWindowVel :: VU.Vector Double -> VU.Vector Double
             -> IO (VU.Vector Double, VU.Vector Double, VU.Vector Double)
 psdWindowVel u v =
     let n  = VU.length u
-        -- h  = window (n-1)
-        h  = listArray (0,n-1) $ repeat 1 :: Array Int Double  -- no window
+        h  = window (n-1)
+        -- h  = listArray (0,n-1) $ repeat 1 :: Array Int Double  -- no window
         he = VU.fromList $ elems h
         dim = VU.sum $ VU.map (^2) he
         yu  = VU.zipWith (*) he u
@@ -226,7 +224,6 @@ psdRaw x = do
 
     a <- createCArray (0, n-1) $ \ptr -> VU.zipWithM_ (pokeElemOff ptr)
                                             (VU.fromList [0 .. (n-1)]) x
-
     let fa   = elems $ dftRC a
         pow' = unfolddftRC n . map (^2) . map magnitude $ fa
         pow  = map (* (1 / fromIntegral n)) pow'
