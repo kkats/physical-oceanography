@@ -1,0 +1,11 @@
+#resolver: lts-6.10
+#resolver: nightly-2016-08-31
+#resolver: lts-7.01
+#resolver: lts-8.12
+#resolver: lts-9.10
+resolver: lts-11.18
+packages:
+- .
+extra-deps: []
+flags: {}
+extra-package-dbs: []
