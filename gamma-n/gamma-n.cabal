@@ -20,7 +20,7 @@ library
   build-depends:       base
                     
   default-language:    Haskell2010
-  ghc-options:         -O
+  ghc-options:         -O -Wall
 
 Test-Suite simpleGammaN
    type: exitcode-stdio-1.0
@@ -33,4 +33,5 @@ Test-Suite simpleGammaN
                         fortran/patched/gamma-n.o
                         fortran/patched/gamma.a
                         -lgfortran
-                        -lnetcdff
+                        -L/export/home/kats/lib -lnetcdff
+                        -Wl,-rpath=/export/home/kats/lib

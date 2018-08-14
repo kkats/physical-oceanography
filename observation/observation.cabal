@@ -21,7 +21,7 @@ cabal-version:       >=1.10
 library
   ghc-options:         -Wall -O2
   other-extensions:    OverloadedStrings
-  exposed-modules:     Oceanogr.CTD, Oceanogr.CTD.Z
+  exposed-modules:     Oceanogr.CTD, Oceanogr.CTD.Z, Oceanogr.LADCP
   build-depends:       base,
                        attoparsec,
                        bytestring,
