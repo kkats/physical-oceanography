@@ -13,10 +13,6 @@ import Data.Complex          (realPart, imagPart, magnitude)
 import Foreign.Storable      (pokeElemOff)
 import Numeric.IEEE          (nan)
 import System.IO
--- for test
--- import System.Random.MWC     (withSystemRandom, asGenIO)
--- import System.Random.MWC.Distributions (standard)
--- import Debug.Trace (trace)
 import Text.Printf
 
 import DSP.Window            (bartlett) -- no Welch?
@@ -272,6 +268,9 @@ psdRawVel u v = do
     return (VU.fromList ke, VU.fromList cw, VU.fromList ccw)
 
 {-
+import System.Random.MWC     (withSystemRandom, asGenIO)
+import System.Random.MWC.Distributions (standard)
+import Debug.Trace (trace)
 --
 -- TEST
 --
