@@ -5,11 +5,12 @@
 module Oceanogr.CTD (
 Cast, Station(..), CTDdata(..), CTDitem(..), CTDfileRead(..),
 readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
-findCommon, findCTDfromCast, findIdxfromCast, sf, si, formTime
+findCommon, findCTDfromCast, findIdxfromCast, sf, si, formTime, gammanCTD
 ) where
 
 import Oceanogr.GSW (gsw_distance, putLoc)
 import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sigma0)
+import Oceanogr.GammaN (gamma_n)
 
 import qualified Data.ByteString.Char8       as B
 import qualified Data.Vector.Unboxed         as V
@@ -24,6 +25,7 @@ import Data.Monoid (mconcat, Last(..))
 import Data.UnixTime
 import GHC.Float (double2Float, float2Double)
 import Numeric.IEEE (nan)
+import System.IO (stderr)
 import Text.Printf
 
 -- import Debug.Trace
@@ -44,7 +46,8 @@ instance Show Station where
     show s = printf "stn=%s, cast=%d, lon=%8.4f, lat=%8.4f, depth=%7.1f (%s)"
                     (B.unpack . fst . stnCast $ s) (snd. stnCast $ s)
                     (stnLongitude s) (stnLatitude s) (stnDepth s)
-                    (B.unpack $ formatUnixTimeGMT webDateFormat (stnTime s))
+                    (B.unpack $ formatUnixTimeGMT "%d %b %Y %H:%M %z" (stnTime s))
+
 
 data CTDdata = CTDdata {
              ctdStation :: Station,
@@ -165,6 +168,35 @@ addCTSA ctd = do
     return $ CTDdata stn p t s o ct sa pt
 
 --
+-- Approximate neutral density surface
+--
+gammanCTD :: CTDdata -> IO (V.Vector Double)
+gammanCTD ctd = do
+    let p = V.toList . V.map float2Double $ ctdP ctd
+        s = V.toList . V.map float2Double $ ctdS ctd
+        t = V.toList . V.map float2Double $ ctdT ctd
+        lon = float2Double . stnLongitude . ctdStation $ ctd
+        lat = float2Double . stnLatitude . ctdStation $ ctd
+
+    (gamma', dglo', dghi') <- gamma_n s t p (length s) (lon, lat)
+
+-- mapM_ (\(g',l',h') -> printf "%10.4f%10.4f%10.4f\n" g' l' h') $ zip3 gamma' dglo' dghi'
+
+    let gamma = V.fromList $ map (\g0 -> if g0 < -90 then nan else g0) gamma'
+        nmiss = length . filter (\g0 -> g0 < -90) $ gamma'
+        nbad  = length . filter (\(l0, h0) -> abs(l0) > 0.001 || abs(h0) > 0.001)
+                       $ zip dglo' dghi'
+        nbaad = length . filter (\(l0, h0) -> abs(l0) > 0.01 || abs(h0) > 0.01)
+                       $ zip dglo' dghi'
+        nall  = length gamma'
+
+    when (nmiss > 0) $ hPrintf stderr "gammanCTD: %d/%d missing\n" nmiss nall
+    when (nbaad > 0) $ hPrintf stderr "gammanCTD: %d/%d with error > 0.01\n" nbaad nall
+    when (nbad > 0) $ hPrintf stderr "gammanCTD: %d/%d with error > 0.001\n" nbad nall
+
+    return gamma
+
+--
 -- Convert DO unit from mL/L -> umol/kg
 -- requires SA and CT
 --
@@ -182,6 +214,7 @@ convDOunit ctd = do
     d0 <- V.mapM (\(d4,ct4,sa4) -> conv d4 ct4 sa4) (V.zip3 d ct' sa')
 
     return $ CTDdata stn' p' t' s' d0 ct' sa' pt'
+
 --
 -- From given CTD data and station list, produce a section
 --
