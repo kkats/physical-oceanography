@@ -172,9 +172,13 @@ addCTSA ctd = do
 --
 gammanCTD :: CTDdata -> IO (V.Vector Double)
 gammanCTD ctd = do
-    let p = V.toList . V.map float2Double $ ctdP ctd
-        s = V.toList . V.map float2Double $ ctdS ctd
-        t = V.toList . V.map float2Double $ ctdT ctd
+    let p' = ctdP ctd
+        s' = ctdS ctd
+        t' = ctdT ctd
+        good = V.map (\(p0, s0, t0) -> (not . isNaN $ p0 + s0 + t0)) $ V.zip3 p' s' t' -- (***)
+        p = V.toList . V.map float2Double . V.map snd . V.filter fst $ V.zip good p'
+        s = V.toList . V.map float2Double . V.map snd . V.filter fst $ V.zip good s'
+        t = V.toList . V.map float2Double . V.map snd . V.filter fst $ V.zip good t'
         lon = float2Double . stnLongitude . ctdStation $ ctd
         lat = float2Double . stnLatitude . ctdStation $ ctd
 
@@ -182,7 +186,7 @@ gammanCTD ctd = do
 
 -- mapM_ (\(g',l',h') -> printf "%10.4f%10.4f%10.4f\n" g' l' h') $ zip3 gamma' dglo' dghi'
 
-    let gamma = V.fromList $ map (\g0 -> if g0 < -90 then nan else g0) gamma'
+    let gamma = map (\g0 -> if g0 < -90 then nan else g0) gamma'
         nmiss = length . filter (\g0 -> g0 < -90) $ gamma'
         nbad  = length . filter (\(l0, h0) -> abs(l0) > 0.001 || abs(h0) > 0.001)
                        $ zip dglo' dghi'
@@ -190,11 +194,16 @@ gammanCTD ctd = do
                        $ zip dglo' dghi'
         nall  = length gamma'
 
-    when (nmiss > 0) $ hPrintf stderr "gammanCTD: %d/%d missing\n" nmiss nall
-    when (nbaad > 0) $ hPrintf stderr "gammanCTD: %d/%d with error > 0.01\n" nbaad nall
-    when (nbad > 0) $ hPrintf stderr "gammanCTD: %d/%d with error > 0.001\n" nbad nall
+    when (nmiss > 0) $ hPrintf stderr "Ocenaogr.CTD.gammanCTD: %d/%d missing\n" nmiss nall
+    when (nbaad > 0) $ hPrintf stderr "Oceanogr.CTD.gammanCTD: %d/%d with error > 0.01\n" nbaad nall
+    when (nbad > 0) $ hPrintf stderr "Ocenaogr.CTD.gammanCTD: %d/%d with error > 0.001\n" nbad nall
+    let takeGood :: [Bool] -> [Double] -> [Double] -> [Double] -- reverse of (***)
+        takeGood [] _ o          = reverse o
+        takeGood (b:bs) (d:ds) o = if b then takeGood bs ds (d:o)
+                                        else takeGood bs (d:ds) (nan:o)
+        takeGood _ [] _          = error "Oceanogr.CTD.gammanCTD.takeGood failed"
 
-    return gamma
+    return (V.fromList $ takeGood (V.toList good) gamma [])
 
 --
 -- Convert DO unit from mL/L -> umol/kg

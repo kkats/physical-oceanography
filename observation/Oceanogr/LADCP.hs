@@ -6,8 +6,10 @@ import qualified Data.Vector.Unboxed as V
 --
 -- dzt is "length of transmitted sound pulse" (Polzin et al. 2002)
 --     output as LADCP_dn_conf_pulse_len_m
+--     see `WT' command of LADCP configuration. If not set, equal to WT
 -- dzr is "receive bin, depth bin range, finite-differencing bin" (Polzin et al., 2002)
 --     output as LADCP_dn_conf_bin_len_m
+--     see `WS' command of LADCP configuration
 --
 data LADCPdata = LADCPdata {
             ladcpCast :: Cast,
