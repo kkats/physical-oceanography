@@ -9,6 +9,9 @@ packages:
 # extra-deps: []
 extra-deps:
 - ../../GSW-Haskell
+- ../oceanogr
 - ../gamma-n
+- ../../hnetcdf-0.4.0.99
+- ../../hmatrix-0.18.2.99
 flags: {}
 extra-package-dbs: []

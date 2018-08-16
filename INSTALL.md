@@ -9,6 +9,7 @@ Following libraries are necessary before installing the Haskell library.
 - [LAPACK](http://www.netlib.org/lapack/) for package `hmatrix`.
 - [GSL](https://www.gnu.org/software/gsl/) for package `hmatrix-gsl-stats`
 
+
     % cd oceanogr
     % stack install
 
