@@ -122,7 +122,7 @@ strainPSD seg ctd gamman n2mean dp n2' = do
     (freq', pow', c') <- psd 3 2 (V.toList strain)
 
     let freq = V.map (/ dp) . V.fromList $ freq'
-        pow  = V.map (* (n2mean * dp)) . V.fromList $ pow'
+        pow  = V.map (* dp) . V.fromList $ pow'
         c   = (head c', last c')
 
     return (freq, pow, c, strain)
@@ -240,16 +240,17 @@ transition (f, p') bf2
 -- Shear to strain ratio (29) as evaluated by (average shear) / (average strain)
 -- where the average are taken between (m1, m2)
 --
-shear2strain :: (V.Vector Double, V.Vector Double) -- ^ shear (freq, spectra)
+shear2strain :: Double                             -- ^ mean buoy freq squared
+             -> (V.Vector Double, V.Vector Double) -- ^ shear (freq, spectra)
              -> (V.Vector Double, V.Vector Double) -- ^ strain (freq, spectra)
              -> (Double, Double)                   -- ^ wave number range
              -> Maybe Double
-shear2strain (fh, ph) (ft, pt) (m1, m2)
+shear2strain n2mean (fh, ph) (ft, pt) (m1, m2)
     = let fph = V.filter (\(f0,_) -> m1 <= f0 && f0 <= m2) $ V.zip fh ph
           fpt = V.filter (\(f0,_) -> m1 <= f0 && f0 <= m2) $ V.zip ft pt
        in if V.null fph || V.null fpt
             then Nothing
-            else Just $ (av . V.map snd $ fph ) / (av . V.map snd $ fpt)
+            else Just $ (av . V.map snd $ fph ) / (av . V.map snd $ fpt) / n2mean
 
 --
 -- Nondimensional gradient spectral level \hat{E} (33) as evaluated by (36)
@@ -321,8 +322,8 @@ calcEps lat (FSPout n2mean n1mean ehat rw mc _)
                    then 3 * (rw + 1) / (4 * rw) * (l1 / l0) * rw ** (-l2)
                    else 3 * (rw + 1) / (4 * rw) * (1 / l0) * sqrt(2 / (rw - 1))
           --
-          prod = 8e-10 * (f / f0) * (n2mean / n0^2) * ehat^2 * h
-       in FSPout n2mean n1mean ehat rw mc (prod / 1.17) -- 1.17 = 1 + Rf -- (4)(5)
+          prod = 8e-10 * (f / f0) * (n2mean / n0^2) * ehat^2 * h'
+       in FSPout n2mean n1mean ehat rw mc (prod * 0.83) -- 0.83 = 1 - Rf -- (4)(5)
 
 
 fsp :: CTDdata
@@ -330,7 +331,7 @@ fsp :: CTDdata
         -> LADCPdata
         -> Segment
         -> Maybe Handle -- ^ for data output
-        -> IO FSPout --  ^ transition wavenumber
+        -> IO FSPout
 fsp ctd gamman ladcp seg h' = do
     let u = inSegment seg (ladcpZ ladcp) (ladcpU ladcp)
         v = inSegment seg (ladcpZ ladcp) (ladcpV ladcp)
@@ -368,8 +369,9 @@ fsp ctd gamman ladcp seg h' = do
     when (isJust h') $ 
         let h = fromJust h'
          in do
-            mapM_ (\(f',p') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e\n" f' p'
-                                (p' * fst stc) (p' * snd stc))
+            -- strain (stp) -> potential energy (n2mean * stp)
+            mapM_ (\(f',p') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e\n" f' (n2mean * p')
+                                (n2mean * p' * fst stc) (n2mean * p' * snd stc))
                 $ Data.List.sortBy (comparing fst) $ zip (V.toList stf) (V.toList stp)
             hPrintf h "\n\n"
             mapM_ (\(f',k',c',w',n') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e%12.3e%12.3e%12.3e\n"
@@ -404,8 +406,8 @@ fsp ctd gamman ladcp seg h' = do
         stpI <- linearInterp1 stf stp f2
         case stpI of
             Left e   -> error e
-            Right p' -> let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
-                            rw    = fromMaybe nan $ shear2strain (shf, shke) (f2, p') range
+            Right pI -> let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
+                            rw    = fromMaybe nan $ shear2strain n2mean (shf, shke) (f2, pI) range
                             ehat  = specLevel n1mean (shf, shke) range
                             mc    = fromMaybe nan tr
                          in if rw > 1
