@@ -1,6 +1,9 @@
 --
 -- | Finescale parameterisation after Polzin et al. (2014) doi:10.1002/2013JC008979
---   Assuming pressure as z (distance)
+--   Assuming pressure = z (depth).
+--   Use angular frequency (2pi/period).
+--   Note that buoyancy frequency is not angular in the equation of motion
+--   (when used as drho/dz) but angular in GM-related equations.
 --
 module Oceanogr.FSparam (
 Segment(..), inSegment,
@@ -39,8 +42,8 @@ data Segment = Segment {
                 }
 
 data FSPout = FSPout {
-                n2mean :: Double, -- ^ mean squared buoyancy frequency [1/s2]
-                n1mean :: Double, -- ^ mean buoyancy frequency [1/s]
+                n2mean :: Double, -- ^ mean squared buoyancy frequency (not angular) [1/s2]
+                n1mean :: Double, -- ^ mean buoyancy frequency (not angular) [1/s]
                 ehat   :: Double, -- ^ nondimensional gradient spectral level
                 rw     :: Double, -- ^ shear to strain ratio
                 mc     :: Double, -- ^ transition vertical wave number [1/m]
@@ -78,7 +81,7 @@ bfreqBG seg ctd gamman = do
         n    = length idx
         lat' = replicate n (float2Double . stnLatitude . ctdStation $ ctd)
 
-    (n2, pmid) <- gsw_nsquared sa ct pp lat' n
+    (n2, pmid) <- gsw_nsquared sa ct pp lat' n -- (-g/rho)(drho/dz) -- (2pi) NOT multiplied
 
     --
     -- n2 = p1 x^2 + p2 x + p3 + error
@@ -121,8 +124,8 @@ strainPSD seg ctd gamman n2mean dp n2' = do
 
     (freq', pow', c') <- psd 3 2 (V.toList strain)
 
-    let freq = V.map (/ dp) . V.fromList $ freq'
-        pow  = V.map (* dp) . V.fromList $ pow'
+    let freq = V.map (* (2 * 3.14159265 / dp)) . V.fromList $ freq'
+        pow  = V.map (/ (2 * 3.14159265 / dp)) . V.fromList $ pow'
         c   = (head c', last c')
 
     return (freq, pow, c, strain)
@@ -151,10 +154,10 @@ shearPSD seg ladcp = do
     -- (f', ke', cw', ccw', cc') <- psdvel 1 2 u v -- better low wavenumber coverage but noisy
     (f', ke', cw', ccw', cc') <- psdvel 2 1 u v
 
-    let f   = V.map (/ dz) . V.fromList $ f'
-        ke  = V.map (* dz) . V.fromList $ ke'
-        cw  = V.map (* dz) . V.fromList $ cw'
-        ccw = V.map (* dz) . V.fromList $ ccw'
+    let f   = V.map (* (2 * 3.14159265 / dz)) . V.fromList $ f'
+        ke  = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ ke'
+        cw  = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ cw'
+        ccw = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ ccw'
         cc  = (head cc', last cc')
         ts  = toShear f
 
@@ -163,7 +166,7 @@ shearPSD seg ladcp = do
 --
 toShear :: V.Vector Double -- ^ frequency, wavenuber
         -> V.Vector Double -> V.Vector Double
-toShear = V.zipWith (\f x -> (2.0 * 3.14159265 * f)^2 * x)
+toShear = V.zipWith (\f x -> f^2 * x)
 
 --
 -- LADCP noise model (43) in shear space
@@ -172,7 +175,7 @@ theta2 :: Double
 theta2 = (3.2e-2)^2
 ladcpNoise :: Segment
            -> LADCPdata
-           -> V.Vector Double -- ^ vertical wave number
+           -> V.Vector Double -- ^ vertical wave number, angular
            -> V.Vector Double
 ladcpNoise seg ladcp m
     = let ndat = inSegment seg (ladcpZ ladcp) (ladcpN ladcp)
@@ -183,7 +186,8 @@ ladcpNoise seg ladcp m
           dz   = float2Double . gridSizeOf $ z
           term1 = V.map sinc . V.map (* (dzr / 2)) $ m -- Polzin's sinc(x) = our sinc(pi x)
           term2 = V.map sinc . V.map (* (dz / 2)) $ m
-          noise = V.zipWith (\t1 t2 -> theta2 * t1^6 * t2^2 / (n / (2.0 * dz))) term1 term2
+          noise = V.zipWith (\t1 t2 -> theta2 * t1^6 * t2^2
+                                    / (2 * 3.14159265 * n / (2.0 * dz))) term1 term2
        in toShear m noise
 --
 -- Correct smoothing as suggeted by Polzin et al. (2002)
@@ -192,7 +196,7 @@ correctLADCPspec :: Double -- ^ dzt
                  -> Double -- ^ dzr
                  -> Double -- ^ d
                  -> Double -- ^ dz
-                 -> V.Vector Double -- ^ vertical wave number
+                 -> V.Vector Double -- ^ vertical wave number, angular
                  -> V.Vector Double
 correctLADCPspec dzt dzr d dz m
     = let st = V.map sinc . V.map (* (dzt / 2)) $ m
@@ -227,7 +231,7 @@ transition (f, p') bf2
         df         = dfhead `V.cons` (V.zipWith (-) (V.tail fmid) fmid) `V.snoc` dflast
         p          = V.map (*2) p'
         integrated = V.scanl1' (+) $ V.zipWith (*) df p
-        threshold  = 2.0 * 3.1419265 * bf2 / 10
+        threshold  = 2.0 * 3.1419265 * (2 * 3.14159265)^2 * bf2 / 10 -- angular N2
         lessthan   = V.filter (< threshold) integrated
      in if V.length lessthan == n
           then Nothing
@@ -250,6 +254,7 @@ shear2strain n2mean (fh, ph) (ft, pt) (m1, m2)
           fpt = V.filter (\(f0,_) -> m1 <= f0 && f0 <= m2) $ V.zip ft pt
        in if V.null fph || V.null fpt
             then Nothing
+            -- n2mean comes from definition of APE, thus not angular ($)
             else Just $ (av . V.map snd $ fph ) / (av . V.map snd $ fpt) / n2mean
 
 --
@@ -269,13 +274,13 @@ specLevel bf (f, p) (m1, m2)
 -- Garrett-Munk (1976) shear spectrum (m^2 E^{GM}_k(m)) after (23) and (24)
 --
 shearGM :: Double          -- ^ mean buoyancy freq in [1/s]
-        -> V.Vector Double -- freq
+        -> V.Vector Double -- anguar freq
         -> V.Vector Double
 shearGM bf
-    = let n0 = 3.0 / (60 * 60)       :: Double -- 3 [cph]
+    = let n0 = 3.0 / (60 * 60)       :: Double -- 3 [cph] -- not angular as bf is not angular
           e0 = 3.0e-3                :: Double -- [m^2 s^{-2}]
           m0 = 4 * 3.14159265 / 1300 :: Double -- [1/m], mode 4
-          ms = m0 * bf / n0
+          ms = m0 * (bf / n0)
           c  = (bf / n0) * e0 * 2 / 3.14159265
        in V.map (\m' -> m'^2 * 0.75 * c * ms / (ms^2 + m'^2))
 
@@ -306,23 +311,24 @@ calcEps :: Double -- ^ latitude
         -> FSPout -- ^ other parameters
         -> FSPout
 calcEps lat (FSPout n2mean n1mean ehat rw mc _)
-    = let n0   = 3 / (60 * 60)    :: Double -- 3cph
+    = let n0   = (2 * 3.14159265) * 3 / (60 * 60) :: Double -- 3cph
+                                                            -- angular (to be divided by angular f)
           f0   = abs $ gsw_f 32.5 :: Double -- coriolis
           f    = abs $ gsw_f lat
           h    = 3 * (rw + 1) / (4 * rw) * sqrt(2 / (rw - 1))
-                   * (acosh (n1mean / f) / acosh (n0 / f0))
+                   * (acosh (2 * 3.14159265 * n1mean / f) / acosh (n0 / f0)) -- n1mean is non-angular
           --
           -- Ijichi and Hibiya (2015)
           --
           l0   = 2 * acosh (n0 / f0) / 3.14159265
-          muGM = 2 * acosh (n1mean / f) / 3.14159265
+          muGM = 2 * acosh (2 * 3.14159265 * n1mean / f) / 3.14159265
           l1   = 2 * muGM^2
           l2   = log (2 * muGM) / log 3
           h'   = if rw <= 9
                    then 3 * (rw + 1) / (4 * rw) * (l1 / l0) * rw ** (-l2)
                    else 3 * (rw + 1) / (4 * rw) * (1 / l0) * sqrt(2 / (rw - 1))
           --
-          prod = 8e-10 * (f / f0) * (n2mean / n0^2) * ehat^2 * h'
+          prod = 8e-10 * (f / f0) * ((2 * 3.14159265)^2 * n2mean / n0^2) * ehat^2 * h'
        in FSPout n2mean n1mean ehat rw mc (prod * 0.83) -- 0.83 = 1 - Rf -- (4)(5)
 
 
@@ -356,7 +362,7 @@ fsp ctd gamman ladcp seg h' = do
     (shf, shke', shcw', shccw', shc) <- shearPSD seg ladcp
     let correctme = V.zipWith (*) (correctLADCPspec (float2Double $ ladcpDzt ladcp)
                                                     (float2Double $ ladcpDzr ladcp)
-                                                     9.0 dzLADCP stf)
+                                                     9.0 dzLADCP shf)
         shke = correctme shke'
         shcw = correctme shcw'
         shccw = correctme shccw'
@@ -366,16 +372,18 @@ fsp ctd gamman ladcp seg h' = do
         tr = transition (shf, shke) n2mean
 
     -- output for visual inspection if valid Handle is given (**)
+    -- frequency is NOT angular
     when (isJust h') $ 
         let h = fromJust h'
          in do
-            -- strain (stp) -> potential energy (n2mean * stp)
-            mapM_ (\(f',p') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e\n" f' (n2mean * p')
-                                (n2mean * p' * fst stc) (n2mean * p' * snd stc))
+            -- strain (stp) -> potential energy (n2mean * stp) -- not angular ($)
+            mapM_ (\(f',p') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e\n" (f' / (2 * 3.14159265))
+                                (n2mean * p') (n2mean * p' * fst stc) (n2mean * p' * snd stc))
                 $ Data.List.sortBy (comparing fst) $ zip (V.toList stf) (V.toList stp)
             hPrintf h "\n\n"
             mapM_ (\(f',k',c',w',n') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e%12.3e%12.3e%12.3e\n"
-                                        f' k' (k' * fst shc) (k' * snd shc) c' w' n')
+                                        (f' / (2 * 3.14159265))
+                                        k' (k' * fst shc) (k' * snd shc) c' w' n')
                 $ Data.List.sortBy (comparing $ \(z,_,_,_,_) -> z)
                 $ zip5 (V.toList shf) (V.toList shke) (V.toList shcw) (V.toList shccw)
                        (V.toList noise)
@@ -449,7 +457,7 @@ gnuplotscript seg label tr dfile = a ++ b ++ [d c] ++ e
          ++ " '' i 1 u 1:6 t 'CCW' w l lt 4 lw 2,"
     d = case tr of
           Nothing -> (++ " '' i 1 u 1:(2*$7) t '2xNoise' w l lt 2 lw 3")
-          Just tr'-> (++ " '' i 1 u 1:(2*$7) t '2xNoise' w l lt 2 lw 3," ++ show tr' ++ ",t notitle w l lt 6")
+          Just tr'-> (++ " '' i 1 u 1:(2*$7) t '2xNoise' w l lt 2 lw 3," ++ show (tr' / (2 * 3.14159265)) ++ ",t notitle w l lt 6")
 --  density
     e = ["set size 0.25, 1",
          "set origin 0, 0",
