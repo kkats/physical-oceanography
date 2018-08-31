@@ -78,7 +78,7 @@ bfreqBG seg ctd gamman = do
         n    = length idx
         lat' = replicate n (float2Double . stnLatitude . ctdStation $ ctd)
 
-    (n2, pmid) <- gsw_nsquared sa ct pp lat' n -- (-g/rho)(drho/dz) -- (2pi) NOT multiplied
+    (n2, pmid) <- gsw_nsquared sa ct pp lat' n -- (-g/rho)(drho/dz)
 
     --
     -- n2 = p1 x^2 + p2 x + p3 + error
@@ -331,9 +331,10 @@ fsp :: CTDdata
         -> V.Vector Double -- ^ neutral density
         -> LADCPdata
         -> Segment
+        -> Maybe Double -- ^ upper shear wavenumber
         -> Maybe Handle -- ^ for data output
         -> IO FSPout
-fsp ctd gamman ladcp seg h' = do
+fsp ctd gamman ladcp seg nf h' = do
     let u = inSegment seg (ladcpZ ladcp) (ladcpU ladcp)
         v = inSegment seg (ladcpZ ladcp) (ladcpV ladcp)
         z = inSegment seg (ladcpZ ladcp) (ladcpZ ladcp)
@@ -365,6 +366,14 @@ fsp ctd gamman ladcp seg h' = do
         noise = ladcpNoise seg ladcp shf
     -- transition
         tr = transition (shf, shke) n2mean
+    -- upper frequency free from noise
+        uff :: Maybe Double -> Maybe Double -> Maybe Double
+        uff Nothing Nothing  = Nothing
+        uff (Just a) Nothing = Just a
+        uff Nothing (Just b) = Just b
+        uff (Just a) (Just b) = Just $ min a b
+        uf = uff tr nf
+            
 
     -- output for visual inspection if valid Handle is given (**)
     -- frequency is not angular in output
@@ -393,10 +402,10 @@ fsp ctd gamman ladcp seg h' = do
 --- (1) Shear spectra are greater than (2 x LADCP noise level)
     let f0 = V.map (\(f',_,_) -> f') . V.filter (\(_,k',n') -> k' >= 2 * n')
                                       $ V.zip3 shf shke noise
---- (2) frequencies lower than mc (trasition  .. if exists)
-        f1 = case tr of
-                Nothing  -> f0
-                Just tr' -> V.filter (< tr') f0
+--- (2) frequencies lower than upperlimit (trasition  .. if exists)
+        f1 = case uf of
+                Nothing   -> f0
+                Just uf' -> V.filter (< uf') f0
 --- (3) zero frequency does not contribute
         f2 = V.filter (> 1.0e-6) f1
 --- (4) if some good frequencies are left
@@ -411,7 +420,7 @@ fsp ctd gamman ladcp seg h' = do
             Right pI -> let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
                             rw    = fromMaybe nan $ shear2strain n2mean (shf, shke) (f2, pI) range
                             ehat  = specLevel n1mean (shf, shke) range
-                            mc    = fromMaybe nan tr
+                            mc    = fromMaybe nan uf
                          in if rw > 1
                               then return $ calcEps lat (FSPout n2mean n1mean ehat rw mc nan)
                               else return (FSPout n2mean n1mean ehat rw mc nan)
