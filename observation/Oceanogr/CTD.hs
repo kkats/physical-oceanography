@@ -142,7 +142,7 @@ readCTD fname a = do
                                $ V.filter (\(p0,t0,s0,d0) -> any (not . isNaN) [p0,t0,s0,d0])
                                $ V.zip4 pres temp salt doxy
 
-    when (V.null pres_ || V.null temp_ || V.null salt_) $ error "Empty P/T/S?"
+    when (V.null pres_ || V.null temp_ || V.null salt_) $ error ("Empty P/T/S? (" ++ fname ++ ")")
 
     return $ CTDdata station pres_ temp_ salt_ doxy_ V.empty V.empty V.empty
 
@@ -184,7 +184,7 @@ gammanCTD ctd = do
 
     (gamma', dglo', dghi') <- gamma_n s t p (length s) (lon, lat)
 
--- mapM_ (\(g',l',h') -> printf "%10.4f%10.4f%10.4f\n" g' l' h') $ zip3 gamma' dglo' dghi'
+--mapM_ (\(g',l',h') -> printf "%10.4f%10.4f%10.4f\n" g' l' h') $ zip3 gamma' dglo' dghi'
 
     let gamma = map (\g0 -> if g0 < -90 then nan else g0) gamma'
         nmiss = length . filter (\g0 -> g0 < -90) $ gamma'
@@ -199,9 +199,10 @@ gammanCTD ctd = do
     when (nbad > 0) $ hPrintf stderr "Ocenaogr.CTD.gammanCTD: %d/%d with error > 0.001\n" nbad nall
     let takeGood :: [Bool] -> [Double] -> [Double] -> [Double] -- reverse of (***)
         takeGood [] _ o          = reverse o
+        takeGood (b:bs) [] o     = if b then error "Oceanogr.CTD.gammaCTD.takeGood failed"
+                                        else takeGood bs [] (nan:o)
         takeGood (b:bs) (d:ds) o = if b then takeGood bs ds (d:o)
                                         else takeGood bs (d:ds) (nan:o)
-        takeGood _ [] _          = error "Oceanogr.CTD.gammanCTD.takeGood failed"
 
     return (V.fromList $ takeGood (V.toList good) gamma [])
 
