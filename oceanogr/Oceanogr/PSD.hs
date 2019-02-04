@@ -136,7 +136,7 @@ psdvel ns nb u' v' = do
                                         (vin, _) = slicer ns i v
                                      in psdWindowVel (detrend uin) (detrend vin)
 
-    (ke'', cw'', ccw'') <- unzip3 `fmap` (forM [0 .. (k2-1)] $ \i -> do
+    (ke'', cw'', ccw'') <- unzip3 `fmap` forM [0 .. (k2-1)] (\i -> do
                         (ke2, cw2, ccw2) <- unzip3 `fmap` forM [1 .. ns] (\j ->
                                                 let (ke0, cw0, ccw0) = pow'' !! (j - 1)
                                                  in liftA3 (,,) (ke0 `VU.indexM` i)
@@ -150,8 +150,8 @@ psdvel ns nb u' v' = do
         ccw' = map (/ fromIntegral ns) ccw''
 
         (ff, ke) = unzip $ binAverage nb f ke'
-        cw  = snd . unzip $ binAverage nb f cw'
-        ccw = snd . unzip $ binAverage nb f ccw'
+        cw  = map snd $ binAverage nb f cw'
+        ccw = map snd $ binAverage nb f ccw'
 
         cc       = ci nb ns ((VU.length u - nz) `div` ns) nz
 

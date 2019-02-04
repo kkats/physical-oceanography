@@ -15,23 +15,21 @@ import Oceanogr.CTD
 import Oceanogr.LADCP
 import Oceanogr.PSD (psd, psdvel)
 import Oceanogr.LeastSquare (lsFit3)
-import Oceanogr.GammaN
 import Oceanogr.GSW (linearInterp1, gsw_f)
 import Oceanogr.GSWtools (gsw_nsquared)
 
 import qualified Data.Vector.Unboxed as V
-import qualified Data.Vector.Unboxed.Mutable as VM
 import Control.Monad (zipWithM_, when, mapM_)
-import Data.List (sortBy, zip5)
+import Data.List (sortOn, zip5)
 import Data.Maybe (isJust, fromJust, fromMaybe)
 import Data.Ord (comparing)
 import Data.Vector.Algorithms.Intro (sortBy)
 import GHC.Float (float2Double)
 import Numeric.IEEE (nan)
-import System.IO (withFile, IOMode(..), Handle)
+import System.IO (withFile, IOMode(..), Handle, stderr, hPutStrLn)
 import Text.Printf (hPrintf, printf)
 
--- import Debug.Trace
+--import Debug.Trace
 
 data Segment = Segment {
                 sbound :: Float, -- shallow bound [dbar] (<= including)
@@ -39,12 +37,12 @@ data Segment = Segment {
                 }
 
 data FSPout = FSPout {
-                n2mean :: Double, -- ^ mean squared buoyancy frequency [1/s2]
-                n1mean :: Double, -- ^ mean buoyancy frequency [1/s]
-                ehat   :: Double, -- ^ nondimensional gradient spectral level
-                rw     :: Double, -- ^ shear to strain ratio
-                mc     :: Double, -- ^ transition vertical wave number [1/m]
-                eps    :: Double  -- ^ epsilon
+                getN2mean:: Double, -- ^ mean squared buoyancy frequency [1/s2]
+                getN1mean :: Double, -- ^ mean buoyancy frequency [1/s]
+                getEhat   :: Double, -- ^ nondimensional gradient spectral level
+                getRw     :: Double, -- ^ shear to strain ratio
+                getMc     :: Double, -- ^ transition vertical wave number [1/m]
+                getEps    :: Double  -- ^ epsilon
 }
 
 inSegment :: (V.Unbox a) => Segment -> V.Vector Float -> V.Vector a -> V.Vector a
@@ -71,14 +69,15 @@ bfreqBG seg ctd gamman = do
     gs  <- V.unsafeFreeze gs'
 
     let idx  = V.toList . V.map fst $ gs
-        ct   = map float2Double . map ((ctdCT ctd) V.!) $ idx
-        sa   = map float2Double . map ((ctdSA ctd) V.!) $ idx
+        ct   = map (float2Double . (ctdCT ctd V.!)) idx
+        sa   = map (float2Double . (ctdSA ctd V.!)) idx
         -- do NOT sort pressure
         pp   = V.toList . V.map float2Double $ p
         n    = length idx
         lat' = replicate n (float2Double . stnLatitude . ctdStation $ ctd)
 
     (n2, pmid) <- gsw_nsquared sa ct pp lat' n -- (-g/rho)(drho/dz)
+
 
     --
     -- n2 = p1 x^2 + p2 x + p3 + error
@@ -100,24 +99,21 @@ gridSizeOf x
           dx  = V.head dxs
           fluc = V.map (\x' -> abs (x' - dx) / dx) dxs
        in if V.any (> 0.01 * dx) fluc
-            then error $ "gridSizeOf: uneven grid"
+            then error "gridSizeOf: uneven grid"
             else dx
 ---
 --- strain
 ---
-strainPSD :: Segment -- ^ define depths
-          -> CTDdata
-          -> V.Vector Double -- ^ neutral density
-          -> Double          -- ^ mean squared buoyancy frequency
+strainPSD :: Double          -- ^ mean squared buoyancy frequency
           -> Double          -- ^ vertical grid size
           -> V.Vector Double -- ^ n2 deviation  (= n2 - n2fit)
           -> IO (V.Vector Double, -- ^ frequency
                  V.Vector Double, -- ^ strain spectrum
                  (Double, Double), -- ^ 95 % conf.interval
                  V.Vector Double)  -- ^ strain profile
-strainPSD seg ctd gamman n2mean dp n2' = do
+strainPSD n2m dp n2' = do
 
-    let strain = V.map (/ n2mean) n2'
+    let strain = V.map (/ n2m) n2'
 
     (freq', pow', c') <- psd 3 2 (V.toList strain)
 
@@ -195,16 +191,16 @@ correctLADCPspec :: Double -- ^ dzt
                  -> Double -- ^ dz
                  -> V.Vector Double -- ^ vertical wave number
                  -> V.Vector Double
-correctLADCPspec dzt dzr d dz m
+correctLADCPspec dzt dzr d' dz m
     = let st = V.map sinc . V.map (* (dzt / 2)) $ m
           sr = V.map sinc . V.map (* (dzr / 2)) $ m
           sz = V.map sinc . V.map (* (dz / 2)) $ m
-          sd = V.map sinc . V.map (* (d / 2)) $ m
+          sc = V.map sinc . V.map (* (d' / 2)) $ m
           s1 = V.zipWith (*) (V.map (^2) st) (V.map (^2) sr)
           s2 = V.map (^2) sz
           s3 = V.zipWith (*) (V.map (^4) sr) (V.map (^2) sz)
-          s4 = V.map (^2) sd
-       in V.zipWith4 (\a b c d -> 1.0 / (a * b * c * d)) s1 s2 s3 s4
+          s4 = V.map (^2) sc
+       in V.zipWith4 (\a b c e -> 1.0 / (a * b * c * e)) s1 s2 s3 s4
 correctCTDspec :: Double -- ^ dz
                -> V.Vector Double -- ^ vertical wave number
                -> V.Vector Double
@@ -217,7 +213,8 @@ correctCTDspec dz
 --
 transition :: (V.Vector Double, V.Vector Double) -- ^ shear (freq, spectra)
             -> Double                            -- (mean) buoyancy freq squared
-            -> Maybe Double                      -- Nothing if not reached
+            -> Either Int Double                 -- Left 1 if not reached
+                                                 -- Left (-1) if too large
 transition (f, p') bf2
   = let av2 :: Double -> Double -> Double
         av2 a b = (a + b) / 2
@@ -225,17 +222,20 @@ transition (f, p') bf2
         dflast     = V.last f - f V.! (n-2)
         dfhead     = f V.! 1 - V.head f
         fmid       = V.zipWith av2 f (V.tail f)
-        df         = dfhead `V.cons` (V.zipWith (-) (V.tail fmid) fmid) `V.snoc` dflast
+        df         = dfhead `V.cons` V.zipWith (-) (V.tail fmid) fmid `V.snoc` dflast
         p          = V.map (*2) p'
         integrated = V.scanl1' (+) $ V.zipWith (*) df p
         threshold  = 2.0 * 3.1419265 * bf2 / 10
         lessthan   = V.filter (< threshold) integrated
-     in if V.length lessthan == n
-          then Nothing
-          else let i = V.length lessthan - 1
-                   r = (threshold - integrated V.! i) 
-                        / (integrated V.! (i+1) - integrated V.! i)
-                in Just $ r * (f V.! (i+1) - f V.! i) + f V.! i -- linear interpolation
+     in if V.null lessthan
+          then Left (-1) -- already too big (wavebreaking at larger scales)
+          else if V.length lessthan == n
+                 then Left 1 -- does not break
+                 else let i = V.length lessthan - 1
+                          r = (threshold - integrated V.! i) 
+                               / (integrated V.! (i+1) - integrated V.! i)
+                       in Right $ r * (f V.! (i+1) - f V.! i) + f V.! i
+                                                        -- linear interpolation
 
 --
 -- Shear to strain ratio (29) as evaluated by (average shear) / (average strain)
@@ -318,7 +318,7 @@ calcEps lat (FSPout n2mean n1mean ehat rw mc _)
           l0   = 2 * acosh (n0 / f0) / 3.14159265
           muGM = 2 * acosh (n1mean / f) / 3.14159265
           l1   = 2 * muGM^2
-          l2   = log (2 * muGM) / log 3
+          l2   = logBase 3 (2 * muGM)
           h'   = if rw <= 9
                    then 3 * (rw + 1) / (4 * rw) * (l1 / l0) * rw ** (-l2)
                    else 3 * (rw + 1) / (4 * rw) * (1 / l0) * sqrt(2 / (rw - 1))
@@ -333,25 +333,30 @@ fsp :: CTDdata
         -> Segment
         -> Maybe Double -- ^ upper shear wavenumber
         -> Maybe Handle -- ^ for data output
-        -> IO FSPout
-fsp ctd gamman ladcp seg nf h' = do
-    let u = inSegment seg (ladcpZ ladcp) (ladcpU ladcp)
-        v = inSegment seg (ladcpZ ladcp) (ladcpV ladcp)
-        z = inSegment seg (ladcpZ ladcp) (ladcpZ ladcp)
-        e = inSegment seg (ladcpZ ladcp) (ladcpEV ladcp)
-        n = inSegment seg (ladcpZ ladcp) (ladcpN ladcp)
-        dzLADCP = float2Double $ gridSizeOf z
-        lat = float2Double . stnLatitude . ctdStation  $ ctd
-
+        -> IO (Maybe FSPout)
+fsp ctd gamman ladcp seg nf h' =
+ let u = inSegment seg (ladcpZ ladcp) (ladcpU ladcp)
+     v = inSegment seg (ladcpZ ladcp) (ladcpV ladcp)
+     z = inSegment seg (ladcpZ ladcp) (ladcpZ ladcp)
+     e = inSegment seg (ladcpZ ladcp) (ladcpEV ladcp)
+     n = inSegment seg (ladcpZ ladcp) (ladcpN ladcp)
+     dzLADCP = float2Double $ gridSizeOf z
+     lat = float2Double . stnLatitude . ctdStation  $ ctd
+     g    = inSegment seg (ctdP ctd) gamman
+  in
+   if V.any isNaN g || V.any isNaN v
+   then hPutStrLn stderr "fsp: gap(s) in data" >> return Nothing
+   else do
     -- background stratification
     (p, n2, n2fit) <- bfreqBG seg ctd gamman
+
     let n2mean = av n2
         n1mean = av (V.map sqrt . V.filter (> 0) $ n2) -- sorting removes most of negatives, but not all
         n2'    = V.zipWith (-) n2 n2fit
         dp     = gridSizeOf p
 
     -- strain spectrum
-    (stf, stp', stc, strain) <- strainPSD seg ctd gamman n2mean dp n2'
+    (stf, stp', stc, strain) <- strainPSD n2mean dp n2'
     let stp = V.zipWith (*) stp' (correctCTDspec dp stf)
 
     -- shear spectrum
@@ -367,13 +372,14 @@ fsp ctd gamman ladcp seg nf h' = do
     -- transition
         tr = transition (shf, shke) n2mean
     -- upper frequency free from noise
-        uff :: Maybe Double -> Maybe Double -> Maybe Double
-        uff Nothing Nothing  = Nothing
-        uff (Just a) Nothing = Just a
-        uff Nothing (Just b) = Just b
-        uff (Just a) (Just b) = Just $ min a b
+        uff :: Either Int Double -> Maybe Double -> Maybe Double
+        uff (Left _) Nothing  = Nothing
+        uff (Right a) Nothing = Just a
+        uff (Left 1) (Just b) = Just b
+        uff (Left (-1)) (Just b) = Nothing
+        uff (Right a) (Just b) = Just $ min a b
+        uff _ _ = error "uff"
         uf = uff tr nf
-            
 
     -- output for visual inspection if valid Handle is given (**)
     -- frequency is not angular in output
@@ -382,16 +388,16 @@ fsp ctd gamman ladcp seg nf h' = do
          in do
             mapM_ (\(f',p') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e\n" (f' / (2 * 3.14159265))
                                 (n2mean * p') (n2mean * p' * fst stc) (n2mean * p' * snd stc))
-                $ Data.List.sortBy (comparing fst) $ zip (V.toList stf) (V.toList stp)
+                $ sortOn fst $ zip (V.toList stf) (V.toList stp)
             hPrintf h "\n\n"
             mapM_ (\(f',k',c',w',n') -> hPrintf h "%8.4f%12.3e%12.3e%12.3e%12.3e%12.3e%12.3e\n"
                                         (f' / (2 * 3.14159265))
                                         k' (k' * fst shc) (k' * snd shc) c' w' n')
-                $ Data.List.sortBy (comparing $ \(z,_,_,_,_) -> z)
+                $ sortOn (\(z,_,_,_,_) -> z)
                 $ zip5 (V.toList shf) (V.toList shke) (V.toList shcw) (V.toList shccw)
                        (V.toList noise)
             hPrintf h "\n\n"
-            V.mapM_ (\(p', g') -> hPrintf h "%8.1f%12.5f\n" p' g') $ V.zip p strain
+            V.mapM_ (uncurry (hPrintf h "%8.1f%12.5f\n")) $ V.zip p strain
             hPrintf h "\n\n"
             V.mapM_ (\(z',u',v',e',n') -> hPrintf h "%8.2f%10.3f%10.3f%10.3f%8d\n" z' u' v' e' n')
                 $ V.zip5 z u v e n
@@ -411,19 +417,19 @@ fsp ctd gamman ladcp seg nf h' = do
 --- (4) if some good frequencies are left
 
     if V.null f2
-      then return (FSPout n2mean n1mean nan nan nan nan)
+      then return (Just $ FSPout n2mean n1mean nan nan nan nan)
       else do
         -- strain spectrum interpolated onto shf
         stpI <- linearInterp1 stf stp f2
         case stpI of
-            Left e   -> error e
+            Left e'  -> error e'
             Right pI -> let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
                             rw    = fromMaybe nan $ shear2strain n2mean (shf, shke) (f2, pI) range
                             ehat  = specLevel n1mean (shf, shke) range
                             mc    = fromMaybe nan uf
                          in if rw > 1
-                              then return $ calcEps lat (FSPout n2mean n1mean ehat rw mc nan)
-                              else return (FSPout n2mean n1mean ehat rw mc nan)
+                              then return $ Just $ calcEps lat (FSPout n2mean n1mean ehat rw mc nan)
+                              else return $ Just $ FSPout n2mean n1mean ehat rw mc nan
 
 ---
 --- Example gnuplot script for plotting the diagnosis above (**)
@@ -445,7 +451,7 @@ gnuplotscript seg label tr dfile = a ++ b ++ [d c] ++ e
          "set xrange [0.002:0.5]",
          "set grid",
          "set title \"" ++ label ++ "\"",
-         "set key right bottom"]
+         "set key right top"]
     b = case tr of
           Nothing -> []
           Just _  -> ["set parametric",
@@ -453,10 +459,10 @@ gnuplotscript seg label tr dfile = a ++ b ++ [d c] ++ e
     c = "plot '" ++ dfile ++ "' index 0 using 1:2 title 'Ep' with line linetype 1 linewidth 4,"
          ++ " '' i 0 u 1:3 notitle w l lt 1 lw 1,"
          ++ " '' i 0 u 1:4 notitle w l lt 1 lw 1,"
-         ++ " '' i 1 u 1:2 t 'Ek'  w l lt 3 lw 4,"
-         ++ " '' i 1 u 1:3 notitle w l lt 3 lw 1,"
-         ++ " '' i 1 u 1:4 notitle w l lt 3 lw 1,"
-         ++ " '' i 1 u 1:5 t 'CW'  w l lt 5 lw 2,"
+         ++ " '' i 1 u 1:2 t 'Ek'  w l lt 2 lw 4,"
+         ++ " '' i 1 u 1:3 notitle w l lt 2 lw 1,"
+         ++ " '' i 1 u 1:4 notitle w l lt 2 lw 1,"
+         ++ " '' i 1 u 1:5 t 'CW'  w l lt 3 lw 2,"
          ++ " '' i 1 u 1:6 t 'CCW' w l lt 4 lw 2,"
     d = case tr of
           Nothing -> (++ " '' i 1 u 1:(2*$7) t '2xNoise' w l lt 2 lw 3")
@@ -475,14 +481,14 @@ gnuplotscript seg label tr dfile = a ++ b ++ [d c] ++ e
          "set origin 0.25, 0",
          "set xrange [*:*]",
          printf "set yrange [%.0f:%0.f] reverse" (sbound seg) (dbound seg),
-         "plot '" ++ dfile ++ "' index 3 using 2:1 notitle '' with line lt 5,"
-         ++ "     ''             i     3 u     3:1 notitle w    l    lt 4,"
-         ++ "     ''             i     3 u     4:1 notitle w    l    lt 1 lw 3",
+         "plot '" ++ dfile ++ "' index 3 using 2:1 notitle '' with line lt 1,"
+         ++ "     ''             i     3 u     3:1 notitle w    l    lt 2,"
+         ++ "     ''             i     3 u     4:1 notitle w    l    lt 3 lw 3",
 -- data num
          "set size 0.3, 0.25",
          "set origin 0.7, 0",
          printf "set yrange [%.0f:%0.f] reverse" (sbound seg) (dbound seg),
-         "set xrange [0:100]",
+         "set xrange [*:*]",
          "set noytics",
          "plot '" ++ dfile ++ "' index 3 using 5:1 notitle with line lt 3",
          "set nomultiplot",

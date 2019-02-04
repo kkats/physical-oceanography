@@ -53,7 +53,7 @@ main = do
                     "CT" -> CT
                     "SA" -> SA
                     "DO" -> DO
-                    _    -> error $ "unknown item: " ++ (head args)
+                    _    -> error $ "unknown item: " ++ head args
                     
 
     files <- filter (\f -> f /= "." && f /= "..") `fmap` getDirectoryContents unzippedDir

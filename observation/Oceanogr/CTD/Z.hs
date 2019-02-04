@@ -96,7 +96,7 @@ gOnP_ ctd = do
         here         = (float2Double $ stnLongitude stn,
                         float2Double $ stnLatitude stn)
         (p, t, s, o) = V.unzip4
-                     $ V.filter (\(p9,t9,s9,_) -> (not. isNaN $ p9 + t9 + s9))--no DO
+                     $ V.filter (\(p9,t9,s9,_) -> not. isNaN $ p9 + t9 + s9)--no DO
                      $ V.zip4 p' t' s' o'
         phere        = V.toList . V.map float2Double $ p
         there        = V.toList . V.map float2Double $ t

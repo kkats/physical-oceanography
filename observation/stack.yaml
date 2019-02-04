@@ -3,15 +3,19 @@
 #resolver: lts-7.01
 #resolver: lts-8.12
 #resolver: lts-9.10
-resolver: lts-11.18
+#resolver: lts-11.18
+#resolver: lts-12.16
+resolver: lts-12.26
 packages:
 - .
+- ../../hnetcdf
+- ../../hstatistics
 # extra-deps: []
 extra-deps:
 - ../../GSW-Haskell
 - ../oceanogr
 - ../gamma-n
-- ../../hnetcdf-0.4.0.99
-- ../../hmatrix-0.18.2.99
+- hmatrix-repa-0.1.2.2@sha256:baa4f6ec54473e4d5f3cdf0fca4dd1c41350c78c95878150d32d62ea32c8077f
+- repa-io-3.4.1.1@sha256:b42fcf370823f4444229eb3593dee500aa2b57033e85f9adf6a34260d5b1fb08
 flags: {}
 extra-package-dbs: []

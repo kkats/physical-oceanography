@@ -2,9 +2,9 @@
 -- | Least squares fit
 --
 module Oceanogr.LeastSquare (lsFit2, lsFit2dangerous, lsFit3, lsFit1) where
-import Numeric.LinearAlgebra              ((<>), diagRect, tr)
+import Prelude hiding ((<>))
+import Numeric.LinearAlgebra              ((<>), diagRect, tr, inv, chol, sym)
 import Numeric.LinearAlgebra.Data         (fromList, fromLists, toLists, atIndex)
-import Numeric.LinearAlgebra              (inv, chol, sym)
 import Numeric.Statistics                 (ols)
 import Statistics.Distribution            (complCumulative)
 import Statistics.Distribution.ChiSquared (chiSquared)

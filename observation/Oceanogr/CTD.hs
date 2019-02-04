@@ -5,7 +5,7 @@
 module Oceanogr.CTD (
 Cast, Station(..), CTDdata(..), CTDitem(..), CTDfileRead(..),
 readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
-findCommon, findCTDfromCast, findIdxfromCast, sf, si, formTime, gammanCTD
+findCommon, findCTDfromCast, findIdxfromCast, sf, si, sd, formTime, gammanCTD
 ) where
 
 import Oceanogr.GSW (gsw_distance, putLoc)
@@ -20,14 +20,13 @@ import Data.Attoparsec.ByteString (parseOnly)
 import Data.Attoparsec.ByteString.Char8 (double, signed, decimal)
 import Data.Char   (isSpace)
 import Data.List   (findIndex, minimumBy)
-import Data.Maybe  (fromMaybe)
+import Data.Maybe  (fromMaybe, isNothing)
 import Data.Monoid (mconcat, Last(..))
 import Data.UnixTime
 import GHC.Float (double2Float, float2Double)
 import Numeric.IEEE (nan)
-import System.IO (stderr)
+import System.IO (stderr, hPutStrLn)
 import Text.Printf
-
 -- import Debug.Trace
 
 --
@@ -102,14 +101,14 @@ readCTD fname a = do
                         $ (getLast . mconcat) $ map (Last . getStation a) header
         cast      = fromMaybe (error $ "Cast not found in " ++ fname)
                         $ (getLast . mconcat) $ map (Last . getCast a) header
-        depth     = fromMaybe (error $ "Depth not found in " ++ fname)
-                        $ (getLast . mconcat) $ map (Last . getDepth a) header
         date      = fromMaybe (error $ "Date not found in " ++ fname)
                         $ (getLast . mconcat) $ map (Last . getDate a) header
         time      = fromMaybe (error $ "Time not found in " ++ fname)
                         $ (getLast . mconcat) $ map (Last . getTime a) header
-        station   = Station (stnnbr,cast) longitude latitude depth (formTime date time)
         maxn      = length body
+
+        -- sometimes missing
+        depth'    = (getLast . mconcat) $ map (Last . getDepth a) header
 
     -- data
     pres' <- VM.replicate maxn nan :: IO (VM.IOVector Float)
@@ -142,7 +141,17 @@ readCTD fname a = do
                                $ V.filter (\(p0,t0,s0,d0) -> any (not . isNaN) [p0,t0,s0,d0])
                                $ V.zip4 pres temp salt doxy
 
+
     when (V.null pres_ || V.null temp_ || V.null salt_) $ error ("Empty P/T/S? (" ++ fname ++ ")")
+
+    when (isNothing depth') $ hPutStrLn stderr "Oceanogr.CTD.readCTD: Missing DEPTH entry -- using (max pressure + 10)"
+    let depth = case depth' of
+                  Just d' -> if d' == -999
+                               then V.maximum pres_ + 10
+                               else d'
+                  Nothing -> V.maximum pres_ + 10
+
+        station   = Station (stnnbr,cast) longitude latitude depth (formTime date time)
 
     return $ CTDdata station pres_ temp_ salt_ doxy_ V.empty V.empty V.empty
 
@@ -175,7 +184,7 @@ gammanCTD ctd = do
     let p' = ctdP ctd
         s' = ctdS ctd
         t' = ctdT ctd
-        good = V.map (\(p0, s0, t0) -> (not . isNaN $ p0 + s0 + t0)) $ V.zip3 p' s' t' -- (***)
+        good = V.map (\(p0, s0, t0) -> not . isNaN $ p0 + s0 + t0) $ V.zip3 p' s' t' -- (***)
         p = V.toList . V.map float2Double . V.map snd . V.filter fst $ V.zip good p'
         s = V.toList . V.map float2Double . V.map snd . V.filter fst $ V.zip good s'
         t = V.toList . V.map float2Double . V.map snd . V.filter fst $ V.zip good t'
@@ -188,9 +197,9 @@ gammanCTD ctd = do
 
     let gamma = map (\g0 -> if g0 < -90 then nan else g0) gamma'
         nmiss = length . filter (\g0 -> g0 < -90) $ gamma'
-        nbad  = length . filter (\(l0, h0) -> abs(l0) > 0.001 || abs(h0) > 0.001)
+        nbad  = length . filter (\(l0, h0) -> abs l0 > 0.001 || abs h0 > 0.001)
                        $ zip dglo' dghi'
-        nbaad = length . filter (\(l0, h0) -> abs(l0) > 0.01 || abs(h0) > 0.01)
+        nbaad = length . filter (\(l0, h0) -> abs l0 > 0.01 || abs h0 > 0.01)
                        $ zip dglo' dghi'
         nall  = length gamma'
 
@@ -215,7 +224,7 @@ gammanCTD ctd = do
 convDOunit :: CTDdata -> IO CTDdata
 convDOunit ctd = do
     let CTDdata stn' p' t' s' d ct' sa' pt' = ctd
-        conv :: Float -> Float -> Float -> IO (Float)
+        conv :: Float -> Float -> Float -> IO Float
         conv d3 ct3 sa3
           | isNaN (d3 + ct3 + sa3) = return nan
           | otherwise              = do
@@ -297,7 +306,7 @@ findIdxfromCast :: [CTDdata] -> Cast -> Int
 findIdxfromCast ctds cast = fromMaybe (error "findCTDfromCast: no such cast")
                                       (findIndex (\ctd -> (stnCast . ctdStation) ctd == cast) ctds)
 findCTDfromCast :: [CTDdata] -> Cast -> CTDdata
-findCTDfromCast ctds cast = ctds !! (findIdxfromCast ctds cast)
+findCTDfromCast ctds cast = ctds !! findIdxfromCast ctds cast
 
 formTime :: B.ByteString -> B.ByteString -> UnixTime
 formTime date time = parseUnixTime "%Y%m%d%H%M" (date `B.append` time)
@@ -352,3 +361,5 @@ sf = either (const nan) double2Float . parseOnly double . prepstring
 si :: B.ByteString -> Int
 si = either (const 0) id . parseOnly (signed decimal) . prepstring
 
+sd :: B.ByteString -> Double
+sd = either (const nan) id . parseOnly double . prepstring
