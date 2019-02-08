@@ -15,7 +15,7 @@ import Oceanogr.CTD
 import Oceanogr.LADCP
 import Oceanogr.PSD (psd, psdvel)
 import Oceanogr.LeastSquare (lsFit3)
-import Oceanogr.GSW (linearInterp1, gsw_f)
+import Oceanogr.GSW (gsw_f)
 import Oceanogr.GSWtools (gsw_nsquared)
 
 import qualified Data.Vector.Unboxed as V
@@ -29,7 +29,7 @@ import Numeric.IEEE (nan)
 import System.IO (withFile, IOMode(..), Handle, stderr, hPutStrLn)
 import Text.Printf (hPrintf, printf)
 
---import Debug.Trace
+-- import Debug.Trace
 
 data Segment = Segment {
                 sbound :: Float, -- shallow bound [dbar] (<= including)
@@ -42,7 +42,8 @@ data FSPout = FSPout {
                 getEhat   :: Double, -- ^ nondimensional gradient spectral level
                 getRw     :: Double, -- ^ shear to strain ratio
                 getMc     :: Double, -- ^ transition vertical wave number [1/m]
-                getEps    :: Double  -- ^ epsilon
+                getEps    :: Double, -- ^ epsilon
+                getUD     :: Int     -- ^ =1 for CW>CCW; =-1 for CCW>CW; =0 for undefinable(##)
 }
 
 inSegment :: (V.Unbox a) => Segment -> V.Vector Float -> V.Vector a -> V.Vector a
@@ -115,7 +116,8 @@ strainPSD n2m dp n2' = do
 
     let strain = V.map (/ n2m) n2'
 
-    (freq', pow', c') <- psd 3 2 (V.toList strain)
+    (freq', pow', c') <- psd 1 2 (V.toList strain)
+    -- (freq', pow', c') <- psd 1 1 (V.toList strain)
 
     let freq = V.map (* (2 * 3.14159265 / dp)) . V.fromList $ freq'
         pow  = V.map (/ (2 * 3.14159265 / dp)) . V.fromList $ pow'
@@ -144,8 +146,8 @@ shearPSD seg ladcp = do
 
     when (V.null z') $ error "shearPSD: Segment out of bound"
 
-    -- (f', ke', cw', ccw', cc') <- psdvel 1 2 u v -- better low wavenumber coverage but noisy
-    (f', ke', cw', ccw', cc') <- psdvel 2 1 u v
+    (f', ke', cw', ccw', cc') <- psdvel 1 2 u v
+    -- (f', ke', cw', ccw', cc') <- psdvel 1 1 u v
 
     let f   = V.map (* (2 * 3.14159265 / dz)) . V.fromList $ f'
         ke  = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ ke'
@@ -215,21 +217,19 @@ transition :: (V.Vector Double, V.Vector Double) -- ^ shear (freq, spectra)
             -> Double                            -- (mean) buoyancy freq squared
             -> Either Int Double                 -- Left 1 if not reached
                                                  -- Left (-1) if too large
-transition (f, p') bf2
-  = let av2 :: Double -> Double -> Double
-        av2 a b = (a + b) / 2
-        n          = V.length f
-        dflast     = V.last f - f V.! (n-2)
-        dfhead     = f V.! 1 - V.head f
-        fmid       = V.zipWith av2 f (V.tail f)
-        df         = dfhead `V.cons` V.zipWith (-) (V.tail fmid) fmid `V.snoc` dflast
-        p          = V.map (*2) p'
-        integrated = V.scanl1' (+) $ V.zipWith (*) df p
+transition (f', p') bf2
+  = let (f, p) = V.unzip $ V.filter (\(f0,_) -> f0 > 1.0e-9) $ V.zip f' p' -- remove zero frequency
+        df     = V.zipWith (-) (V.tail f) f
+        -- (*2) in Eq.(20) is cancelled by (*0.5) in the trapezoid area
+        area   = V.zipWith (*) df $ V.zipWith (+) (V.init p) (V.tail p) -- trapezoid
+        -- area1  = 2 * V.head f * V.head p -- assuming flat power below fist frequency
+        area1 = 0 -- no power contained whatever longer than the bin
+        integrated = V.scanl' (+) area1 area
         threshold  = 2.0 * 3.1419265 * bf2 / 10
-        lessthan   = V.filter (< threshold) integrated
+        lessthan   = V.filter (<= threshold) integrated
      in if V.null lessthan
           then Left (-1) -- already too big (wavebreaking at larger scales)
-          else if V.length lessthan == n
+          else if V.length lessthan == V.length integrated
                  then Left 1 -- does not break
                  else let i = V.length lessthan - 1
                           r = (threshold - integrated V.! i) 
@@ -306,7 +306,7 @@ sinc x =
 calcEps :: Double -- ^ latitude 
         -> FSPout -- ^ other parameters
         -> FSPout
-calcEps lat (FSPout n2mean n1mean ehat rw mc _)
+calcEps lat (FSPout n2mean n1mean ehat rw mc _ ud)
     = let n0   = 2 * 3.14159265 * 3 / (60 * 60) :: Double -- [3cph]
           f0   = abs $ gsw_f 32.5 :: Double -- coriolis
           f    = abs $ gsw_f lat
@@ -324,9 +324,35 @@ calcEps lat (FSPout n2mean n1mean ehat rw mc _)
                    else 3 * (rw + 1) / (4 * rw) * (1 / l0) * sqrt(2 / (rw - 1))
           --
           prod = 8e-10 * (f / f0) * (n2mean / n0^2) * ehat^2 * h'
-       in FSPout n2mean n1mean ehat rw mc (prod * 0.83) -- 0.83 = 1 - Rf -- (4)(5)
+       in FSPout n2mean n1mean ehat rw mc (prod * 0.83) ud -- 0.83 = 1 - Rf -- (4)(5)
 
+--
+-- CW or CCW dominant?
+--
+isUpDown :: V.Vector Double  -- ^ freq
+         -> V.Vector Double -- ^ CW spectrum
+         -> V.Vector Double -- ^ CCW spectrum
+         -> (Double, Double) -- ^ 95 % conf.interval
+         -> (Double, Double) -- ^ integration limits (m1, m2)
+         -> Int
+isUpDown f cw ccw c (m1, m2)
+    = let (_, gcw, gccw) = V.unzip3
+                         $ V.filter (\(f0,_,_) -> m1 <= f0 && f0 <= m2)
+                         $ V.zip3 f cw ccw
+          n              = fromIntegral (V.length gcw) :: Double
+          (clow, cup)    = if fst c > snd c -- lint suggested "uncurry (>) c"
+                             then (snd c / n, fst c / n)
+                             else (fst c / n, snd c / n) -- reduced conf int by addition
+          compWithC :: Double -> Double -> Int
+          compWithC a b
+            | a * clow > b * cup = 1
+            | a * cup < b * clow = -1
+            | otherwise          = 0
+       in compWithC (V.sum gcw) (V.sum gccw)
 
+---
+--- Fine scale parameterisation
+---
 fsp :: CTDdata
         -> V.Vector Double -- ^ neutral density
         -> LADCPdata
@@ -369,17 +395,6 @@ fsp ctd gamman ladcp seg nf h' =
         shccw = correctme shccw'
     -- noise spectrum
         noise = ladcpNoise seg ladcp shf
-    -- transition
-        tr = transition (shf, shke) n2mean
-    -- upper frequency free from noise
-        uff :: Either Int Double -> Maybe Double -> Maybe Double
-        uff (Left _) Nothing  = Nothing
-        uff (Right a) Nothing = Just a
-        uff (Left 1) (Just b) = Just b
-        uff (Left (-1)) (Just b) = Nothing
-        uff (Right a) (Just b) = Just $ min a b
-        uff _ _ = error "uff"
-        uf = uff tr nf
 
     -- output for visual inspection if valid Handle is given (**)
     -- frequency is not angular in output
@@ -402,34 +417,41 @@ fsp ctd gamman ladcp seg nf h' =
             V.mapM_ (\(z',u',v',e',n') -> hPrintf h "%8.2f%10.3f%10.3f%10.3f%8d\n" z' u' v' e' n')
                 $ V.zip5 z u v e n
 
+    -- transition
+    let tr = transition (shf, shke) n2mean
+    -- upper frequency free from noise
+        uf :: Either Int Double -> Maybe Double -> Maybe Double
+        uf (Left _) Nothing  = Nothing
+        uf (Right a) Nothing = Just a
+        uf (Left 1) (Just b) = Just b
+        uf (Left (-1)) (Just b) = Nothing
+        uf (Right a) (Just b) = Just $ min a b
+        uf _ _ = error "FSparam:uf"
+        u = uf tr nf
 ---
 --- "Good" vertical scale
 ---
 --- (1) Shear spectra are greater than (2 x LADCP noise level)
-    let f0 = V.map (\(f',_,_) -> f') . V.filter (\(_,k',n') -> k' >= 2 * n')
+        f0 = V.map (\(f',_,_) -> f') . V.filter (\(_,k',n') -> k' >= 2 * n')
                                       $ V.zip3 shf shke noise
---- (2) frequencies lower than upperlimit (trasition  .. if exists)
-        f1 = case uf of
+--- (2) frequencies lower than upperlimit (transition  ... if exists)
+        f1 = case u of
                 Nothing   -> f0
                 Just uf' -> V.filter (< uf') f0
 --- (3) zero frequency does not contribute
         f2 = V.filter (> 1.0e-6) f1
 --- (4) if some good frequencies are left
-
     if V.null f2
-      then return (Just $ FSPout n2mean n1mean nan nan nan nan)
+      then return (Just $ FSPout n2mean n1mean nan nan nan nan 0)
       else do
-        -- strain spectrum interpolated onto shf
-        stpI <- linearInterp1 stf stp f2
-        case stpI of
-            Left e'  -> error e'
-            Right pI -> let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
-                            rw    = fromMaybe nan $ shear2strain n2mean (shf, shke) (f2, pI) range
-                            ehat  = specLevel n1mean (shf, shke) range
-                            mc    = fromMaybe nan uf
-                         in if rw > 1
-                              then return $ Just $ calcEps lat (FSPout n2mean n1mean ehat rw mc nan)
-                              else return $ Just $ FSPout n2mean n1mean ehat rw mc nan
+        let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
+            ud    = isUpDown shf shcw shccw shc range
+            rw    = fromMaybe nan $ shear2strain n2mean (shf, shke) (stf, stp) range
+            ehat  = specLevel n1mean (shf, shke) range
+            mc    = fromMaybe nan u
+         in if rw > 1
+              then return $ Just $ calcEps lat (FSPout n2mean n1mean ehat rw mc nan ud)
+              else return $ Just $ FSPout n2mean n1mean ehat rw mc nan ud
 
 ---
 --- Example gnuplot script for plotting the diagnosis above (**)
