@@ -2,7 +2,7 @@
 -- Power Spectrum Density using FFT
 --
 --
-module Oceanogr.PSD (psd, psdvel) where
+module Oceanogr.PSD (psd, psdvel, psd', psdvel') where
 import Oceanogr.LeastSquare           (lsFit2dangerous)
 
 import qualified Data.Vector.Unboxed as VU
@@ -54,22 +54,26 @@ dofWindow = 1.5
 --
 
 --
--- Confidence interval (95%) by sectioning and frequency binning
+-- Confidence interval by sectioning and frequency binning
 -- Zero padding after Minobe (3.15) http://www.sci.hokudai.ac.jp/~minobe/data_anal/chap3.pdf
 --
-ci ::  Int -- ^ number of sections
+ci :: Double -- ^ confidence interval
+    -> Int -- ^ number of sections
     -> Int -- ^ number of frequency binning
     -> Int -- ^ length of one section
     -> Int -- ^ number of zero padding
     -> [Double]
-ci nb ns len nz = let dof :: Double
-                      dof = 2 * fromIntegral nb
-                           * (fromIntegral ns - 1 + fromIntegral len / fromIntegral (len + nz))
-                           * dofWindow
-                   in map ((\c' -> dof / c') . quantileChiSquared dof) [0.975, 0.025]
+ci confi nb ns len nz =
+    let dof :: Double
+        dof = 2 * fromIntegral nb
+                * (fromIntegral ns - 1 + fromIntegral len / fromIntegral (len + nz))
+                * dofWindow
+        dn  = (1.0 - confi) / 2
+        up  = 1.0 - (1.0 - confi) / 2
+     in map ((\c' -> dof / c') . quantileChiSquared dof) [up, dn]
 
 slicer :: Int -- ^ number of sections
-       -> Int -- ^ required section (0 for first section)
+       -> Int -- ^ required section (1 (one ... not zero!) for the first section)
        -> VU.Vector Double -- ^ input
        -> (VU.Vector Double, Int) -- ^ output and number of zero padding
 slicer ns i x = let n = VU.length x
@@ -83,11 +87,13 @@ slicer ns i x = let n = VU.length x
                                        zlen = to - from + 1
                                     in (VU.slice from zlen x VU.++ VU.replicate nz 0, nz)
 
-psd :: Int                     -- ^ number of sections
+psd = psd' 0.95
+psd' :: Double                 -- ^ confidence interval
+    -> Int                     -- ^ number of sections
     -> Int                     -- ^ number of freq binning
     -> [Double]                -- ^ input
     -> IO ([Double], [Double], [Double]) -- ^ frequency, power, 95% confidence interval
-psd ns nb x' = do
+psd' confi ns nb x' = do
     let x  = VU.fromList x'
         (_, nz) = slicer ns 1 x
         k  = (VU.length x - nz) `div` ns
@@ -108,7 +114,7 @@ psd ns nb x' = do
 
     -- frequency binning (P.552, NR)
         (ff, pp) = unzip $ binAverage nb f pow
-        cc       = ci nb ns ((VU.length x - nz) `div` ns) nz
+        cc       = ci confi nb ns ((VU.length x - nz) `div` ns) nz
 
     -- power diagnostics
     --when (length ff < 2) $ error "PSD.psd: time series too short"
@@ -118,12 +124,14 @@ psd ns nb x' = do
     --printf "in = %g, out = %g\n" inPower outPower
     return (ff, pp, cc)
 
-psdvel :: Int                                                   -- ^ number of sections
+psdvel = psdvel' 0.95
+psdvel' :: Double                                               -- ^ confidence interval
+       -> Int                                                   -- ^ number of sections
        -> Int                                                   -- ^ number of freq binning
        -> [Double] -> [Double]                                  -- ^ input
        -> IO ([Double], [Double], [Double], [Double], [Double])
                 -- ^ frequcney, power of ke, p.of cw, p.of ccw, 95% confidence interval
-psdvel ns nb u' v' = do
+psdvel' confi ns nb u' v' = do
     let u  = VU.fromList u'
         v  = VU.fromList v'
         (_, nz) = slicer ns 1 u
@@ -153,7 +161,7 @@ psdvel ns nb u' v' = do
         cw  = map snd $ binAverage nb f cw'
         ccw = map snd $ binAverage nb f ccw'
 
-        cc       = ci nb ns ((VU.length u - nz) `div` ns) nz
+        cc       = ci confi nb ns ((VU.length u - nz) `div` ns) nz
 
     return (ff, ke, cw, ccw, cc)
 
