@@ -5,11 +5,12 @@
 module Oceanogr.CTD (
 Cast, Station(..), CTDdata(..), CTDitem(..), CTDfileRead(..),
 readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
-findCommon, findCTDfromCast, findIdxfromCast, sf, si, sd, formTime, gammanCTD
+findCommon, findCTDfromCast, findIdxfromCast, sf, si, sd, formTime, gammanCTD,
+fillDepth
 ) where
 
 import Oceanogr.GSW (gsw_distance, putLoc)
-import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sigma0)
+import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sigma0, gsw_z_from_p)
 import Oceanogr.GammaN (gamma_n)
 
 import qualified Data.ByteString.Char8       as B
@@ -176,6 +177,26 @@ addCTSA ctd = do
 
     return $ CTDdata stn p t s o ct sa pt
 
+--
+-- Sometimes depth are missing
+-- use (bottom measurement + 10) for tentative bottom depth
+-- d == 4 was used in 74AB20020301 (I05_2002)
+--
+fillDepth :: CTDdata -> IO CTDdata
+fillDepth ctd@(CTDdata stn p t s o ct sa pt)
+  | isNaN d || d == 999 || d == 0 || d == 4 = 
+        let (pgood, _, _) = V.unzip3 $ V.filter (\(p0,t0,s0) -> not . isNaN $ p0 + t0 + s0)
+                                     $ V.zip3 p t s
+            maxp          = float2Double (V.maximum pgood) + 10.0
+         in gsw_z_from_p maxp (float2Double . stnLatitude $ stn) >>= \dep
+            -> return $ CTDdata (Station (stnCast stn) (stnLongitude stn) (stnLatitude stn)
+                                         (negate . double2Float $ dep) (stnTime stn))
+                                         p t s o ct sa pt
+  | otherwise = return ctd
+    
+ where
+    d = stnDepth stn
+    
 --
 -- Approximate neutral density surface
 --

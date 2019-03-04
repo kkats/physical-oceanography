@@ -94,7 +94,7 @@ bfreqBG seg ctd gamman = do
 ---
 --- grid interval (with 1% fluctuation allowed)
 ---
-gridSizeOf :: (V.Unbox a, RealFloat a) => V.Vector a -> a
+gridSizeOf :: (V.Unbox a, RealFloat a, Show a) => V.Vector a -> a
 gridSizeOf x
     = let dxs = V.zipWith (-) (V.tail x) x
           dx  = V.head dxs
@@ -222,7 +222,7 @@ transition (f', p') bf2
         df     = V.zipWith (-) (V.tail f) f
         -- (*2) in Eq.(20) is cancelled by (*0.5) in the trapezoid area
         area   = V.zipWith (*) df $ V.zipWith (+) (V.init p) (V.tail p) -- trapezoid
-        -- area1  = 2 * V.head f * V.head p -- assuming flat power below fist frequency
+        -- area1  = 2 * V.head f * V.head p -- assuming flat power below first frequency
         area1 = 0 -- no power contained whatever longer than the bin
         integrated = V.scanl' (+) area1 area
         threshold  = 2.0 * 3.1419265 * bf2 / 10
@@ -414,8 +414,12 @@ fsp ctd gamman ladcp seg nf h' =
             hPrintf h "\n\n"
             V.mapM_ (uncurry (hPrintf h "%8.1f%12.5f\n")) $ V.zip p strain
             hPrintf h "\n\n"
+            -- gnuplot complains if all n's are equal
+            let n1 = if V.all (== V.head n) n
+                       then (V.head n + 1) `V.cons` V.tail n
+                       else n
             V.mapM_ (\(z',u',v',e',n') -> hPrintf h "%8.2f%10.3f%10.3f%10.3f%8d\n" z' u' v' e' n')
-                $ V.zip5 z u v e n
+                $ V.zip5 z u v e n1
 
     -- transition
     let tr = transition (shf, shke) n2mean
@@ -431,6 +435,8 @@ fsp ctd gamman ladcp seg nf h' =
 ---
 --- "Good" vertical scale
 ---
+--- (0) Wavenumber resolution of shear
+        df = V.minimum (V.head shf `V.cons` V.zipWith (-) (V.tail shf) shf) - 1.0e-6
 --- (1) Shear spectra are greater than (2 x LADCP noise level)
         f0 = V.map (\(f',_,_) -> f') . V.filter (\(_,k',n') -> k' >= 2 * n')
                                       $ V.zip3 shf shke noise
@@ -439,12 +445,13 @@ fsp ctd gamman ladcp seg nf h' =
                 Nothing   -> f0
                 Just uf' -> V.filter (< uf') f0
 --- (3) zero frequency does not contribute
-        f2 = V.filter (> 1.0e-6) f1
+        f2 = V.filter (> df) f1
 --- (4) if some good frequencies are left
     if V.null f2
       then return (Just $ FSPout n2mean n1mean nan nan nan nan 0)
-      else do
-        let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
+      else
+        -- let range = (V.head f2 - 1.0e-6, V.last f2 + 1.0e-6)
+        let range = (df, V.last f2 + df) -- large scale is noise free
             ud    = isUpDown shf shcw shccw shc range
             rw    = fromMaybe nan $ shear2strain n2mean (shf, shke) (stf, stp) range
             ehat  = specLevel n1mean (shf, shke) range
