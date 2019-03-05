@@ -4,7 +4,7 @@
 --
 module Oceanogr.CTD (
 Cast, Station(..), CTDdata(..), CTDitem(..), CTDfileRead(..),
-readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
+readCTD, readStnList, printStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
 findCommon, findCTDfromCast, findIdxfromCast, sf, si, sd, formTime, gammanCTD,
 fillDepth
 ) where
@@ -28,7 +28,8 @@ import GHC.Float (double2Float, float2Double)
 import Numeric.IEEE (nan)
 import System.IO (stderr, hPutStrLn)
 import Text.Printf
--- import Debug.Trace
+
+import Debug.Trace
 
 --
 -- Records
@@ -306,10 +307,10 @@ abscissaCTD ctds' list =
      in (lons, lats, deps, 0:dx, ac)
 
 --
--- use the first two columns as stnnbr and cast for plotting
+-- use the first two columns as Cast (i.e. stnnbr and cast) for plotting
 --
 readStnList :: FilePath -> IO [Cast]
-readStnList f = (map extractor . filter (not . isComment) . B.lines) `fmap` B.readFile f
+readStnList f = (filter (\(s,_) -> not (B.null s)) . map extractor . filter (not . isComment) . B.lines) `fmap` B.readFile f
   where
     extractor :: B.ByteString -> Cast
     extractor ll = let ws = B.words ll
@@ -317,6 +318,17 @@ readStnList f = (map extractor . filter (not . isComment) . B.lines) `fmap` B.re
                                         else ("", 0)
     isComment :: B.ByteString -> Bool
     isComment ll = B.length ll > 1 && B.head ll == '#'
+
+--
+-- print
+--
+printStnList :: CTDdata -> IO ()
+printStnList ctd = let s = ctdStation ctd
+                    in printf "%10s%3d%10.3f%10.3f%10.1f%10.1f  %s\n"
+                              (B.unpack . fst $ stnCast s) (snd . stnCast $ s)
+                              (stnLongitude s) (stnLatitude s) (stnDepth s)
+                              (V.maximum . V.filter (not . isNaN) . ctdP $ ctd)
+                              (B.unpack $ formatUnixTimeGMT "%d %b %Y %H:%M %z" (stnTime s))
                             
 --
 -- misc
@@ -330,7 +342,7 @@ findCTDfromCast :: [CTDdata] -> Cast -> CTDdata
 findCTDfromCast ctds cast = ctds !! findIdxfromCast ctds cast
 
 formTime :: B.ByteString -> B.ByteString -> UnixTime
-formTime date time = parseUnixTime "%Y%m%d%H%M" (date `B.append` time)
+formTime date time = parseUnixTimeGMT "%Y%m%d%H%M" (date `B.append` time) -- assuming GMT
 
 choose :: CTDitem -> CTDfileRead -> [Float] -> Float
 choose item a ws = let (vc, fc) = case item of
