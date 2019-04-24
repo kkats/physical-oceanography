@@ -6,7 +6,9 @@
 #resolver: lts-11.18
 #resolver: lts-12.16
 #resolver: lts-12.26
+#resolver: lts-13.9
 resolver: lts-13.17
+
 packages:
 - .
 extra-deps: []
