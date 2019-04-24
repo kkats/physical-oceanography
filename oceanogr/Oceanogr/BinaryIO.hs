@@ -1,4 +1,5 @@
 {-# LANGUAGE Rank2Types #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 ---- $Id: BinaryIO.hs,v 1.1 2015/01/05 04:48:43 ka Exp ka $ --
 -- 
 -- | With no reasons, I prefer Big Endian to Little Endian.
@@ -9,7 +10,7 @@ module Oceanogr.BinaryIO (readVecF, readVecI16le, writeVecF, appendVecF)
 where
 
 import Control.Monad.Trans.Resource (runResourceT, MonadResource)
-import Data.Conduit                 (runConduit, (.|), Consumer)
+import Data.Conduit                 (runConduit, (.|), ConduitT)
 import Data.Conduit.Binary          (sourceFile, sinkIOHandle)
 import Data.Conduit.Combinators     (sinkVector, yieldMany, sinkFile)
 import Data.Conduit.Cereal          (conduitGet2, conduitPut)
@@ -66,7 +67,7 @@ writeVecF fname v = let go = yieldMany v .| conduitPut putFloat32be .| sinkFile 
                      in runResourceT $ runConduit go
 
 -- slight modification of Data.Conduit.Binary.sinkFile
-sinkFileByAppend :: MonadResource m => FilePath -> Consumer B.ByteString m ()
+sinkFileByAppend :: MonadResource m => FilePath -> forall o. ConduitT B.ByteString o m ()
 sinkFileByAppend fname = sinkIOHandle (IO.openBinaryFile fname IO.AppendMode)
 
 appendVecF :: FilePath -> V.Vector Float -> IO ()

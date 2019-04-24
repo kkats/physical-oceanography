@@ -4,12 +4,13 @@
 --
 module Oceanogr.CTD (
 Cast, Station(..), CTDdata(..), CTDitem(..), CTDfileRead(..),
-readCTD, readStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
-findCommon, findCTDfromCast, findIdxfromCast, sf, si, sd, formTime, gammanCTD
+readCTD, readStnList, printStnList, sectionCTD, abscissaCTD, addCTSA, convDOunit,
+findCommon, findCTDfromCast, findIdxfromCast, sf, si, sd, formTime, gammanCTD,
+fillDepth
 ) where
 
 import Oceanogr.GSW (gsw_distance, putLoc)
-import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sigma0)
+import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sigma0, gsw_z_from_p)
 import Oceanogr.GammaN (gamma_n)
 
 import qualified Data.ByteString.Char8       as B
@@ -27,6 +28,7 @@ import GHC.Float (double2Float, float2Double)
 import Numeric.IEEE (nan)
 import System.IO (stderr, hPutStrLn)
 import Text.Printf
+
 -- import Debug.Trace
 
 --
@@ -177,6 +179,26 @@ addCTSA ctd = do
     return $ CTDdata stn p t s o ct sa pt
 
 --
+-- Sometimes depth are missing
+-- use (bottom measurement + 10) for tentative bottom depth
+-- d == 4 was used in 74AB20020301 (I05_2002)
+--
+fillDepth :: CTDdata -> IO CTDdata
+fillDepth ctd@(CTDdata stn p t s o ct sa pt)
+  | isNaN d || d == 999 || d == 0 || d == 4 = 
+        let (pgood, _, _) = V.unzip3 $ V.filter (\(p0,t0,s0) -> not . isNaN $ p0 + t0 + s0)
+                                     $ V.zip3 p t s
+            maxp          = float2Double (V.maximum pgood) + 10.0
+         in gsw_z_from_p maxp (float2Double . stnLatitude $ stn) >>= \dep
+            -> return $ CTDdata (Station (stnCast stn) (stnLongitude stn) (stnLatitude stn)
+                                         (negate . double2Float $ dep) (stnTime stn))
+                                         p t s o ct sa pt
+  | otherwise = return ctd
+    
+ where
+    d = stnDepth stn
+    
+--
 -- Approximate neutral density surface
 --
 gammanCTD :: CTDdata -> IO (V.Vector Double)
@@ -285,10 +307,10 @@ abscissaCTD ctds' list =
      in (lons, lats, deps, 0:dx, ac)
 
 --
--- use the first two columns as stnnbr and cast for plotting
+-- use the first two columns as Cast (i.e. stnnbr and cast) for plotting
 --
 readStnList :: FilePath -> IO [Cast]
-readStnList f = (map extractor . filter (not . isComment) . B.lines) `fmap` B.readFile f
+readStnList f = (filter (\(s,_) -> not (B.null s)) . map extractor . filter (not . isComment) . B.lines) `fmap` B.readFile f
   where
     extractor :: B.ByteString -> Cast
     extractor ll = let ws = B.words ll
@@ -296,6 +318,17 @@ readStnList f = (map extractor . filter (not . isComment) . B.lines) `fmap` B.re
                                         else ("", 0)
     isComment :: B.ByteString -> Bool
     isComment ll = B.length ll > 1 && B.head ll == '#'
+
+--
+-- print
+--
+printStnList :: CTDdata -> IO ()
+printStnList ctd = let s = ctdStation ctd
+                    in printf "%10s%3d%10.3f%10.3f%10.1f%10.1f  %s\n"
+                              (B.unpack . fst $ stnCast s) (snd . stnCast $ s)
+                              (stnLongitude s) (stnLatitude s) (stnDepth s)
+                              (V.maximum . V.filter (not . isNaN) . ctdP $ ctd)
+                              (B.unpack $ formatUnixTimeGMT "%d %b %Y %H:%M %z" (stnTime s))
                             
 --
 -- misc
@@ -309,7 +342,7 @@ findCTDfromCast :: [CTDdata] -> Cast -> CTDdata
 findCTDfromCast ctds cast = ctds !! findIdxfromCast ctds cast
 
 formTime :: B.ByteString -> B.ByteString -> UnixTime
-formTime date time = parseUnixTime "%Y%m%d%H%M" (date `B.append` time)
+formTime date time = parseUnixTimeGMT "%Y%m%d%H%M" (date `B.append` time) -- assuming GMT
 
 choose :: CTDitem -> CTDfileRead -> [Float] -> Float
 choose item a ws = let (vc, fc) = case item of

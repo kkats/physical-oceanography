@@ -14,7 +14,7 @@ license-file:        LICENSE
 maintainer:          k.katsumata@jamstec.go.jp
 build-type:          Simple
 extra-source-files:  example/MakeList.hs
-                     example/MR1609.hs
+                     example/SBEproc.hs
                      example/PlotSection.hs
 cabal-version:       >=1.10
 

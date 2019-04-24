@@ -1,9 +1,11 @@
 -- |
 -- Vertical interpolations for CTD data
 --
+-- Primed functions are for uninterpolated (i.e. raw) output
+--
 module Oceanogr.CTD.Z (
-zOnP, zOnG, zOnSigma1, zOnSigma2, zOnSigma4,    -- ^ interpolated
-zOnP', gOnP', sigma1OnP', sigma2OnP', sigma4OnP' -- ^ uninterpolated (i.e. raw output)
+zOnP, zOnG, zOnSigma1, zOnSigma2, zOnSigma4,
+zOnP', gOnP', sigma1OnP', sigma2OnP', sigma4OnP'
 ) where
 
 import Oceanogr.GammaN (gamma_n, neutral_surfaces)

@@ -1,3 +1,4 @@
+{-# LANGUAGE Rank2Types #-}
 -- |
 -- WOCE climatology
 --
@@ -178,7 +179,7 @@ readWGHCraw = do
     var6   <- VM.replicate len3 nan :: IO (VM.IOVector Float)
 
     -- parse and output using Conduit
-    let sink :: Sink B.ByteString (ResourceT IO) ()
+    let sink :: ConduitT B.ByteString Void (ResourceT IO) ()
         sink = do
             s' <- await
             case s' of
@@ -190,7 +191,7 @@ readWGHCraw = do
                                   sink
                              else sink
 
-        read3D :: Consumer B.ByteString (ResourceT IO) [B.ByteString]
+        read3D :: forall o. ConduitT B.ByteString o (ResourceT IO) [B.ByteString]
         read3D = do
             ss' <- await
             case ss' of
@@ -201,9 +202,9 @@ readWGHCraw = do
 
         fillWGHCs ::   B.ByteString -- ^ first line (header)
                     -> [B.ByteString] -- ^ rest (body)
-                    -> Sink B.ByteString (ResourceT IO) ()
+                    -> ConduitT B.ByteString Void (ResourceT IO) ()
         fillWGHCs header body
-          = let fillWGHC :: WGHC1 -> Sink B.ByteString (ResourceT IO) ()
+          = let fillWGHC :: WGHC1 -> ConduitT B.ByteString Void (ResourceT IO) ()
                 fillWGHC (WGHC1 x  y  z  _
                                 n  rb rc d     -- [1]
                                 p  t  pt s     -- [2]
@@ -263,7 +264,7 @@ readWGHCraw = do
 
              in mapM_ fillWGHC $ parseGrid header body
 
-    runResourceT $ source =$= fileRead $$ sink
+    runResourceT . runConduit $ source .| fileRead .| sink
     
     -- [1]
     nbrlev_  <- V.unsafeFreeze nbrlev
@@ -313,11 +314,11 @@ readWGHCraw = do
 ---
 --- Conduit
 ---
-source :: Source (ResourceT IO) FilePath
+source :: ConduitT () FilePath (ResourceT IO) ()
 source = CL.sourceList $ map (dataDir </>) dataFiles
 
 -- read each file under Conduit with bracketP()
-fileRead :: Conduit FilePath (ResourceT IO) B.ByteString
+fileRead :: ConduitT FilePath B.ByteString (ResourceT IO) ()
 fileRead = awaitForever $ \fname ->
                 bracketP (openFile fname ReadMode)
                          hClose

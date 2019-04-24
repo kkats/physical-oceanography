@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 -- |
 -- Power Spectrum Density using FFT
 --
@@ -7,13 +9,11 @@ import Oceanogr.LeastSquare           (lsFit2dangerous)
 
 import qualified Data.Vector.Unboxed as VU
 import Control.Applicative   (liftA3)
-import Control.Monad         (when, zipWithM_, forM)
-import Data.Array.CArray     (createCArray, toForeignPtr, Array, elems, listArray)
+import Control.Monad         (when, forM)
+import Data.Array.CArray     (createCArray, Array, elems)
 import Data.Complex          (realPart, imagPart, magnitude)
 import Foreign.Storable      (pokeElemOff)
-import Numeric.IEEE          (nan)
 import System.IO
-import Text.Printf
 
 import DSP.Window            (bartlett) -- no Welch?
 import Math.FFT
@@ -86,7 +86,6 @@ slicer ns i x = let n = VU.length x
                                        to   = n - 1
                                        zlen = to - from + 1
                                     in (VU.slice from zlen x VU.++ VU.replicate nz 0, nz)
-
 psd = psd' 0.95
 psd' :: Double                 -- ^ confidence interval
     -> Int                     -- ^ number of sections
@@ -176,7 +175,7 @@ detrend x = let n  = VU.length x
                 (b', _, _) = lsFit2dangerous x' a1 a2 -- last argument is dummy
                 b  = concat b'
              in VU.fromList
-                $ zipWith3 (\x' a1' a2' -> x' - a1' * (b !! 0) - a2' * (b !! 1)) x' a1 a2
+                $ zipWith3 (\x0 a1' a2' -> x0 - a1' * (b !! 0) - a2' * (b !! 1)) x' a1 a2
 
 
 binAverage :: Int -> [Double] -> [Double] -> [(Double, Double)]
@@ -239,8 +238,8 @@ unfolddftRC :: Int       -- ^ length of input to dftRC
             -> [Double]  -- ^ power (*not* original coefficients)
             -> [Double]
 unfolddftRC n x
-    = let (nf, nb) = if even n then (n `div` 2 + 1, n `div` 2 - 1) -- (***)
-                               else ((n+1) `div` 2, (n-1) `div` 2)
+    = let (_, nb) = if even n then (n `div` 2 + 1, n `div` 2 - 1) -- (***)
+                              else ((n+1) `div` 2, (n-1) `div` 2)
           doubler :: Int -> Double -> Double
           doubler m x'
             | 1 <= m && m <= nb = 2.0 * x'
