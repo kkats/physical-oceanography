@@ -120,31 +120,32 @@ mycoardsScale :: forall a b s. (NcStorable a, NcStorable b, FromNcAttr a, FromNc
                                 NcStoreExtraCon s a, NcStoreExtraCon s b)
              => NcVar -> s a -> s b
 mycoardsScale v = Data.NetCDF.Store.smap xform
-  where (offset, scale, fill) = triplet v :: (b, b, Maybe a) -- ScopedTypeVariables
+  where (offset, scale, fill) = triplet v
         xform x = case fill of
                     Nothing -> realToFrac $ realToFrac x * scale + offset
                     Just f -> if x == f
                                 then nan
                                 else realToFrac $ realToFrac x * scale + offset
 
-mycoardsScale1 :: forall a b. (FromNcAttr a, FromNcAttr b,
+mycoardsScale1 :: forall a b. (NcStorable a, NcStorable b, FromNcAttr a, FromNcAttr b,
                                 Real a, Fractional b, IEEE b)
                 => NcVar -> a -> b
-mycoardsScale1 v x = case fill of
-                       Nothing -> realToFrac $ realToFrac x * scale + offset
-                       Just f -> if x == f
-                                   then nan
-                                   else realToFrac $ realToFrac x * scale + offset
-  where (offset, scale, fill) = triplet v :: (b, b, Maybe a) -- ScopedTypeVariables
+mycoardsScale1 v x = let (offset, scale, fill) = triplet v
+                      in case fill of
+                           Nothing -> realToFrac $ realToFrac x * scale + offset
+                           Just f -> if x == f
+                                       then nan
+                                       else realToFrac $ realToFrac x * scale + offset
 
-
-
-triplet :: forall a b. (FromNcAttr a, FromNcAttr b,
-                        Fractional b) => NcVar -> (b, b, Maybe a)
+triplet :: forall a. (NcStorable a, FromNcAttr a, Real a)
+                => NcVar -> (CDouble, CDouble, Maybe a)
 triplet v = (offset, scale, fill)
-  where offset = fromMaybe 0.0 $ ncVarAttr v "add_offset"   >>= fromAttr
-        scale  = fromMaybe 1.0 $ ncVarAttr v "scale_factor" >>= fromAttr
-        fill   = ncVarAttr v "_FillValue"   >>= fromAttr
+  where offset = fromMaybe 0.0 $
+                 ncVarAttr v "add_offset" >>= fromAttr :: CDouble
+        scale  = fromMaybe 1.0 $
+                 ncVarAttr v "scale_factor" >>= fromAttr :: CDouble
+        fill   = ncVarAttr v "_FillValue" >>= fromAttr :: Maybe a
+
 --
 -- Copyright (c) 2013, Ian Ross
 -- 
