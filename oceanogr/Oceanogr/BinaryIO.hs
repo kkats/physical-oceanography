@@ -1,12 +1,13 @@
 {-# LANGUAGE Rank2Types #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 ---- $Id: BinaryIO.hs,v 1.1 2015/01/05 04:48:43 ka Exp ka $ --
 -- 
 -- | With no reasons, I prefer Big Endian to Little Endian.
 --   For interfacing with GrADS, float (4 byte) for floating point numbers.
 --   Int32 (4 byte) is used for integral numbers.
 --
-module Oceanogr.BinaryIO (readVecF, readVecI16le, writeVecF, appendVecF)
+module Oceanogr.BinaryIO (readVecF, readVecI16le, readVecI16be, writeVecF, appendVecF)
 where
 
 import Control.Monad.Trans.Resource (runResourceT, MonadResource)
@@ -15,7 +16,7 @@ import Data.Conduit.Binary          (sourceFile, sinkIOHandle)
 import Data.Conduit.Combinators     (sinkVector, yieldMany, sinkFile)
 import Data.Conduit.Cereal          (conduitGet2, conduitPut)
 
-import Data.Serialize.Get (getInt16le, getInt32be)
+import Data.Serialize.Get       (getInt16le, getInt32be, getInt16be)
 import Data.Serialize.IEEE754   (getFloat32be, putFloat32be)
 import qualified Data.Vector.Unboxed as V
 
@@ -34,25 +35,28 @@ import qualified System.IO as IO
 -- runConduit :: Monad m => ConduitM () Void m r -> m r
 -- runResourceT :: MonadBaseControl IO m => ResourceT m a -> m a
 --
+-- go :: FilePath -> Get a -> ConduitM () Void (ResourceT IO) (Data.Vector.Generic.Base.Vector v a)
+go fname getter = sourceFile fname .| conduitGet2 getter .| sinkVector
+
 readVecF :: FilePath -> IO (V.Vector Float)
-readVecF fname = let go = sourceFile fname .| conduitGet2 getFloat32be .| sinkVector
-                    -- go :: ConduitM () Void (ResourceT IO) (Vector Float)
-                  in runResourceT $ runConduit go
+readVecF fname = runResourceT $ runConduit (go fname getFloat32be)
 
 readVecI :: FilePath -> IO (V.Vector Int)
 readVecI fname = do
-        ivec <- runResourceT $ runConduit $ sourceFile fname
-                                                .| conduitGet2 getInt32be
-                                                .| sinkVector
+        ivec <- runResourceT $ runConduit (go fname getInt32be)
         return (V.map fromIntegral ivec)
 
 
 readVecI16le :: FilePath -> IO (V.Vector Double)
 readVecI16le fname = do
-        ivec <- runResourceT $ runConduit $ sourceFile fname
-                                                .| conduitGet2 getInt16le
-                                                .| sinkVector
+        ivec <- runResourceT $ runConduit (go fname getInt16le)
         return (V.map fromIntegral ivec)
+
+readVecI16be :: FilePath -> IO (V.Vector Double)
+readVecI16be fname = do
+        ivec <- runResourceT $ runConduit (go fname getInt16be)
+        return (V.map fromIntegral ivec)
+
 
 -- yieldMany :: (Monad m, MonoFoldable mono) => mono -> forall i. ConduitM i (Element mono) m
 --              instance MonoFoldable (Vector a)
@@ -63,16 +67,16 @@ readVecI16le fname = do
 -- sinkFile :: MonadResource m => FilePath -> forall o. ComduitM ByteString o m ()
 --
 writeVecF :: FilePath -> V.Vector Float -> IO ()
-writeVecF fname v = let go = yieldMany v .| conduitPut putFloat32be .| sinkFile fname
-                     in runResourceT $ runConduit go
+writeVecF fname v = let go' = yieldMany v .| conduitPut putFloat32be .| sinkFile fname
+                     in runResourceT $ runConduit go'
 
 -- slight modification of Data.Conduit.Binary.sinkFile
 sinkFileByAppend :: MonadResource m => FilePath -> forall o. ConduitT B.ByteString o m ()
 sinkFileByAppend fname = sinkIOHandle (IO.openBinaryFile fname IO.AppendMode)
 
 appendVecF :: FilePath -> V.Vector Float -> IO ()
-appendVecF fname  v = let go = yieldMany v .| conduitPut putFloat32be .| sinkFileByAppend fname
-                       in runResourceT $ runConduit go
+appendVecF fname  v = let go' = yieldMany v .| conduitPut putFloat32be .| sinkFileByAppend fname
+                       in runResourceT $ runConduit go'
 
 -- obsolete
 -- readMatF :: forall sh. (Shape sh) => FilePath -> sh -> IO (Array F sh Float)

@@ -29,7 +29,7 @@ import Data.Ord (comparing)
 import Data.Vector.Algorithms.Intro (sortBy)
 import GHC.Float (float2Double)
 import Numeric.IEEE (nan)
-import System.IO (withFile, Handle, stderr, hPutStrLn)
+import System.IO (Handle, stderr, hPutStrLn)
 import Text.Printf (hPrintf, printf)
 
 -- import Debug.Trace

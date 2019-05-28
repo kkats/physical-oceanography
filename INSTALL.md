@@ -1,5 +1,14 @@
 # Installation
 
+### For `LTS-13.17`
+`stack build` complains a version clash in `base` for `hstatistics-0.3`, but the
+recommended trick to `stack.yaml` somehow picks up an older version. Add
+```
+- github: amcphail/hstatistics
+  commit: bae125738c0d6ce68ff23093d5d23ebf32753f67
+```
+to `extra-deps:`.
+
 ## oceanogr
 
 Following libraries are necessary before installing the Haskell library.
