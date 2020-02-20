@@ -291,14 +291,15 @@ sectionCTD ctds list z prof = do
 --
 abscissaCTD :: [CTDdata] -> [Cast]
             -> ([Float], [Float], [Float], [Float], [Float])
-                -- ^ (longitude, latitude, depths, distance, accumulated distance)
+                -- ^ (longitude, latitude, maxp, distance, accumulated distance)
 abscissaCTD ctds' list = 
     let nxs  = [0 .. (length list-1)]
         ctds = map (\m -> findCTDfromCast ctds' (list !! m)) nxs
 
         (lons, lats, deps) = unzip3
                             $ map (\l -> let s = ctdStation $ ctds !! l
-                                          in (stnLongitude s, stnLatitude s, stnDepth s)) nxs
+                                             maxp = V.maximum . V.filter (not . isNaN) . ctdP $ ctds !! l
+                                          in (stnLongitude s, stnLatitude s, maxp)) nxs
         dx = map (\l -> let s0 = ctdStation $ ctds !! l
                             s1 = ctdStation $ ctds !! (l-1)
                          in gsw_distance (putLoc (stnLongitude s0) (stnLatitude s0))
