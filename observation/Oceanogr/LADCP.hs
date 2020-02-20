@@ -11,7 +11,11 @@ import qualified Data.Vector.Unboxed as V
 --     output as LADCP_dn_conf_bin_len_m
 --     see `WS' command of LADCP configuration
 --
+-- isPre2002 = True  -- if processed with UH shear method.
+--           = False -- if processed with LDEO inversion method.
+--
 data LADCPdata = LADCPdata {
+            ladcpIsPre2002 :: Bool,
             ladcpCast :: Cast,
             ladcpDzt  :: Float,
             ladcpDzr  :: Float,

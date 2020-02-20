@@ -37,7 +37,7 @@ import Text.Printf (hPrintf, printf)
 data Segment = Segment {
                 sbound :: Float, -- shallow bound [dbar] (<= including)
                 dbound :: Float  -- deep bound [dbar]    (< not including)
-                }
+} deriving Show
 
 data FSPout = FSPout {
                 getN2mean:: Double, -- ^ mean squared buoyancy frequency [1/s2]
@@ -47,7 +47,7 @@ data FSPout = FSPout {
                 getMc     :: Double, -- ^ transition vertical wave number [1/m]
                 getEps    :: Double, -- ^ epsilon
                 getUD     :: Int     -- ^ =1 for CW>CCW; =-1 for CCW>CW; =0 for undefinable(##)
-}
+} deriving Show
 
 inSegment :: (V.Unbox a) => Segment -> V.Vector Float -> V.Vector a -> V.Vector a
 inSegment s z = V.map snd . V.filter (\(z',_) -> sbound s <= z' && z' < dbound s) . V.zip z
@@ -190,22 +190,28 @@ ladcpNoise seg ladcp m
 --
 -- Correct smoothing as suggeted by Polzin et al. (2002)
 --
-correctLADCPspec :: Double -- ^ dzt
+correctLADCPspec :: Bool -- ^ True to apply Polzin et al. (2002); False to apply Thurnherr (2012)
+                 -> Double -- ^ dzt
                  -> Double -- ^ dzr
-                 -> Double -- ^ d
+                 -> Double -- ^ d'
                  -> Double -- ^ dz
                  -> V.Vector Double -- ^ vertical wave number
                  -> V.Vector Double
-correctLADCPspec dzt dzr d' dz m
+correctLADCPspec isPre2002 dzt dzr d' dz m
     = let st = V.map sinc . V.map (* (dzt / 2)) $ m
           sr = V.map sinc . V.map (* (dzr / 2)) $ m
           sz = V.map sinc . V.map (* (dz / 2)) $ m
           sc = V.map sinc . V.map (* (d' / 2)) $ m
           s1 = V.zipWith (*) (V.map (^2) st) (V.map (^2) sr)
-          s2 = V.map (^2) sz
+          s2 = V.map (^2) sr
           s3 = V.zipWith (*) (V.map (^4) sr) (V.map (^2) sz)
           s4 = V.map (^2) sc
-       in V.zipWith4 (\a b c e -> 1.0 / (a * b * c * e)) s1 s2 s3 s4
+          s5 = V.map (^2) sz
+       in if isPre2002
+                                                                          -- Thurnherr (2012)
+            then V.zipWith4 (\a b c e -> 1.0 / (a * b * c * e)) s1 s2 s3 s4 -- T_UH (1)
+            else V.zipWith4 (\a b c e -> 1.0 / (a * b * c * e)) s1 s5 s5 s4 -- T_VI (8)
+
 correctCTDspec :: Double -- ^ dz
                -> V.Vector Double -- ^ vertical wave number
                -> V.Vector Double
@@ -390,7 +396,8 @@ fsp ctd gamman ladcp seg nf h' =
 
     -- shear spectrum
     (shf, shke', shcw', shccw', shc) <- shearPSD seg ladcp
-    let correctme = V.zipWith (*) (correctLADCPspec (float2Double $ ladcpDzt ladcp)
+    let correctme = V.zipWith (*) (correctLADCPspec (ladcpIsPre2002 ladcp)
+                                                    (float2Double $ ladcpDzt ladcp)
                                                     (float2Double $ ladcpDzr ladcp)
                                                      9.0 dzLADCP shf)
         shke = correctme shke'
