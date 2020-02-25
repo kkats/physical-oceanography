@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 module Oceanogr.CtoS (ctos)
 --
 -- Conductivity to practical salinity according to 海洋観測指針

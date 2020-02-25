@@ -3,7 +3,7 @@
 -- |
 -- XCTD data handling
 --
-module XCTD
+module Oceanogr.XCTD
 (isXCTDall, readXCTD, processXCTD, outputExc)
 where
 
@@ -31,7 +31,7 @@ isXCTDall f = f /= "." && f /= ".." && length f > 4 && let suffix = dropWhile (/
 
 -- Process XCTD *.ALL following Uchida et al. (2011)
 --
-processXCTD :: Maybe Float -- depth correction (CTDdepth = XCTDdepth * (1 + dcorr)
+processXCTD :: Maybe Float -- depth correction (CTDdepth = XCTDdepth * (1 + dcorr))
             -> Maybe Float -- thermal bias (CTDtemp = XCTDtemp + tbias)
             -> Maybe Float -- salt bias (CTDsalt = XCTDtemp + sbias)
             -> CTDdata -- input
@@ -68,10 +68,9 @@ processXCTD dcorr tbias sbias xctd = do
         (t4, s4, d4) = V.unzip3 $ V.filter (\(t', s', d') -> (not . isNaN $ t' + s' + d'))
                                 $ V.zip3 t3 s3 d2
     p4 <- pressure (lon, lat) t4 s4 d4
-
      -- 5. conductivity temporal mismatch
     let c4 = (V.fromList [nan,nan]) V.++
-              V.zipWith (\c1 c2 -> 0.9 * c1 + 0.1 * c2) (V.tail c3) c3
+              V.zipWith (\c1' c2' -> 0.9 * c1' + 0.1 * c2') (V.tail c3) c3
                                                     -- Eq (2) Uchida et al. (2011)
      -- 6. salinity
         (p5, t5, s5) = V.unzip3 $ V.map (\(p', t', c') -> (p', t', ctos (p' / 1.0e5) (t' * 1.00024) c')) -- IPTS-68
@@ -148,7 +147,7 @@ readXCTD fname = do
             | otherwise = let w0 = split (body !! n)
                               d  = head w0 
                               t  = w0 !! 1
-                              c  = w0 !! 2
+                              o  = w0 !! 2
                               s  = w0 !! 3 
                            in do
 #ifdef PRESSURE
@@ -158,7 +157,7 @@ readXCTD fname = do
                             VM.write prs' n (sf d)           -- depth
 #endif
                             VM.write tem' n (sf t)
-                            VM.write con' n (sf c)
+                            VM.write con' n (sf o)
                             VM.write sal' n (sf s)
                             go (n+1)
     go 0
@@ -183,13 +182,13 @@ readXCTD fname = do
 -- parsers
 --
 deg2min :: B.ByteString -> Float
-deg2min d = let (deg, min) = B.break (== '-') d
-                hem        = B.last min
-                min'       = sf . B.tail . B.init $ min
-                deg'       = sf deg
-             in if (hem == 'S' || hem == 'W')
-                  then negate $ deg' + min' / 60
-                  else deg' + min' / 60
+deg2min d = let (degr, minu) = B.break (== '-') d
+                hemi         = B.last minu
+                minu'        = sf . B.tail . B.init $ minu
+                degr'        = sf degr
+             in if (hemi == 'S' || hemi == 'W')
+                  then negate $ degr' + minu' / 60
+                  else degr' + minu' / 60
 
 -- split at comma
 -- comma at the end of line is allowed
@@ -223,8 +222,8 @@ outputExc expo sect odir xctd = do
 -- https://dornsife.usc.edu/assets/sites/463/docs/WOCE_QualityFlags.pdf
 -- 2 "acceptable measurement"
 -- 4 "bad measurement"
-    date <- formatUnixTime "%Y%m%d" (stnTime . ctdStation $ xctd)
-    time <- formatUnixTime "%H%M" (stnTime . ctdStation $ xctd)
+        date = formatUnixTimeGMT "%Y%m%d" (stnTime . ctdStation $ xctd)
+        time = formatUnixTimeGMT "%H%M" (stnTime . ctdStation $ xctd)
 
     withFile fname WriteMode $ \h -> do
             hPutStrLn h "NUMBER_HEADERS = 10"

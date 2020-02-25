@@ -21,11 +21,17 @@ cabal-version:       >=1.10
 library
   ghc-options:         -Wall -O2
   other-extensions:    OverloadedStrings
-  exposed-modules:     Oceanogr.CTD, Oceanogr.CTD.Z, Oceanogr.LADCP, Oceanogr.FSparam
+  exposed-modules:     Oceanogr.CTD,
+                       Oceanogr.CTD.Z,
+                       Oceanogr.LADCP,
+                       Oceanogr.FSparam,
+                       Oceanogr.XCTD,
+                       Oceanogr.CtoS
   build-depends:       base,
                        oceanogr,
                        attoparsec,
                        bytestring,
+                       filepath,
                        ieee754,
                        unix-time,
                        vector,
