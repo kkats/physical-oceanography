@@ -2,6 +2,7 @@ module Oceanogr.LADCP (LADCPdata(..)) where
 
 import Oceanogr.CTD (Cast)
 import qualified Data.Vector.Unboxed as V
+import qualified Data.ByteString.Char8 as B
 
 --
 -- dzt is "length of transmitted sound pulse" (Polzin et al. 2002)
@@ -17,6 +18,7 @@ import qualified Data.Vector.Unboxed as V
 data LADCPdata = LADCPdata {
             ladcpIsPre2002 :: Bool,
             ladcpCast :: Cast,
+            ladcpEXPO :: B.ByteString,
             ladcpDzt  :: Float,
             ladcpDzr  :: Float,
             ladcpZ    :: V.Vector Float,
@@ -24,4 +26,4 @@ data LADCPdata = LADCPdata {
             ladcpV    :: V.Vector Float,
             ladcpEV   :: V.Vector Float,
             ladcpN    :: V.Vector Int
-            }
+            } deriving (Show)

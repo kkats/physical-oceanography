@@ -37,7 +37,7 @@ import Text.Printf (hPrintf, printf)
 data Segment = Segment {
                 sbound :: Float, -- shallow bound [dbar] (<= including)
                 dbound :: Float  -- deep bound [dbar]    (< not including)
-} deriving Show
+} deriving (Show, Eq)
 
 data FSPout = FSPout {
                 getN2mean:: Double, -- ^ mean squared buoyancy frequency [1/s2]
@@ -47,7 +47,7 @@ data FSPout = FSPout {
                 getMc     :: Double, -- ^ transition vertical wave number [1/m]
                 getEps    :: Double, -- ^ epsilon
                 getUD     :: Int     -- ^ =1 for CW>CCW; =-1 for CCW>CW; =0 for undefinable(##)
-} deriving Show
+} deriving (Show, Eq)
 
 inSegment :: (V.Unbox a) => Segment -> V.Vector Float -> V.Vector a -> V.Vector a
 inSegment s z = V.map snd . V.filter (\(z',_) -> sbound s <= z' && z' < dbound s) . V.zip z
@@ -119,8 +119,8 @@ strainPSD n2m dp n2' = do
 
     let strain = V.map (/ n2m) n2'
 
-    (freq', pow', c') <- psd 1 2 (V.toList strain)
-    -- (freq', pow', c') <- psd 1 1 (V.toList strain)
+    -- (freq', pow', c') <- psd 1 2 (V.toList strain)
+    (freq', pow', c') <- psd 1 1 (V.toList strain)
 
     let freq = V.map (* (2 * 3.14159265 / dp)) . V.fromList $ freq'
         pow  = V.map (/ (2 * 3.14159265 / dp)) . V.fromList $ pow'
@@ -149,8 +149,8 @@ shearPSD seg ladcp = do
 
     when (V.null z') $ error "shearPSD: Segment out of bound"
 
-    (f', ke', cw', ccw', cc') <- psdvel 1 2 u v
-    -- (f', ke', cw', ccw', cc') <- psdvel 1 1 u v
+    -- (f', ke', cw', ccw', cc') <- psdvel 1 2 u v
+    (f', ke', cw', ccw', cc') <- psdvel 1 1 u v
 
     let f   = V.map (* (2 * 3.14159265 / dz)) . V.fromList $ f'
         ke  = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ ke'
@@ -226,18 +226,16 @@ transition :: (V.Vector Double, V.Vector Double) -- ^ shear (freq, spectra)
             -> Double                            -- ^ (mean) buoyancy freq squared
             -> Either Int Double                 -- ^ Left 1 if not reached;
                                                  -- Left (-1) if too large
-transition (f', p') bf2
-  = let (f, p) = V.unzip $ V.filter (\(f0,_) -> f0 > 1.0e-9) $ V.zip f' p' -- remove zero frequency
-        df     = V.zipWith (-) (V.tail f) f
-        -- (*2) in Eq.(20) is cancelled by (*0.5) in the trapezoid area
-        area   = V.zipWith (*) df $ V.zipWith (+) (V.init p) (V.tail p) -- trapezoid
-        -- area1  = 2 * V.head f * V.head p -- assuming flat power below first frequency
-        area1 = 0 -- no power contained whatever longer than the bin
-        integrated = V.scanl' (+) area1 area
+transition (f, p) bf2
+  -- since zero frequency is meaningless, do not use trapezoids but rectangles
+  = let fmid       = V.map (* 0.5) $ V.zipWith (+) f (V.tail f)
+        df         = V.zipWith (-) (V.tail fmid) fmid `V.snoc` ((V.last f - V.last fmid) * 2)
+        area       = V.map (* 2) $ V.zipWith (*) df (V.tail p) -- 2 from Eq.(20)
+        integrated = V.scanl' (+) 0 area
         threshold  = 2.0 * 3.1419265 * bf2 / 10
         lessthan   = V.filter (<= threshold) integrated
      in if V.null lessthan
-          then Left (-1) -- already too big (wavebreaking at larger scales)
+          then Left (-1) -- already too big (wavebreaking at larger scales than binsize)
           else if V.length lessthan == V.length integrated
                  then Left 1 -- does not break
                  else let i = V.length lessthan - 1
@@ -437,8 +435,8 @@ fsp ctd gamman ladcp seg nf h' =
         uf :: Either Int Double -> Maybe Double -> Maybe Double
         uf (Left _) Nothing  = Nothing
         uf (Right a) Nothing = Just a
-        uf (Left 1) (Just b) = Just b
-        uf (Left (-1)) (Just _) = Nothing
+        uf (Left 1) (Just b) = Just b     -- does not break within the band
+        uf (Left (-1)) (Just _) = Nothing -- wavebreaking at larger scales
         uf (Right a) (Just b) = Just $ min a b
         uf _ _ = error "FSparam:uf"
         uu = uf tr nf

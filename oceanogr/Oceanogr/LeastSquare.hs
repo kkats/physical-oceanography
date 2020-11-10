@@ -1,7 +1,7 @@
 --
 -- | Least squares fit
 --
-module Oceanogr.LeastSquare (lsFit2, lsFit2dangerous, lsFit3, lsFit1) where
+module Oceanogr.LeastSquare (lsFit1, lsFit2, lsFit2dangerous, lsFit3) where
 import Prelude hiding ((<>))
 import Numeric.LinearAlgebra              ((<>), diagRect, tr, inv, chol, sym)
 import Numeric.LinearAlgebra.Data         (fromList, fromLists, toLists, atIndex)

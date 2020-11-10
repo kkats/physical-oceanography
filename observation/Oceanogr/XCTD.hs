@@ -120,8 +120,8 @@ pressure (lon, lat) t s d = do
 --
 -- XCTD output *.CTD, *.ALL
 --
-readXCTD :: FilePath -> IO CTDdata
-readXCTD fname = do
+readXCTD :: B.ByteString -> FilePath -> IO CTDdata
+readXCTD expo fname = do
 
     c <- B.readFile fname -- file is so small that we rely on laziness
     let ll = B.lines c
@@ -174,7 +174,7 @@ readXCTD fname = do
 
     when (V.null prs_ || V.null tem_ || V.null sal_) $ error ("Empty P/T/S? (" ++ fname ++ ")")
 
-    let station   = Station (stnnbr,cast) longitude latitude nan (formTime date time)
+    let station   = Station (stnnbr,cast) longitude latitude nan (formTime date time) expo
 
     return $ CTDdata station prs_ tem_ sal_ con_ V.empty V.empty V.empty -- keep conductivity in DO's place
 

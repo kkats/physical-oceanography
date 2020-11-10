@@ -21,12 +21,14 @@ import Data.NetCDF.Store
 
 import Data.Array.Repa
 import Data.Array.Repa.Repr.ForeignPtr
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 
 import Foreign.C
 import Numeric.IEEE (IEEE(..), nan)
 
 import Prelude hiding (getChar)
+
+-- import Debug.Trace
 
 get1Double :: NcInfo NcRead -> String -> IO CDouble
 get1Double info varname
@@ -52,26 +54,24 @@ getReal info varname
                 eval <- get info var :: IO (Either NcError (Array F sh CDouble))
                 case eval of
                     Left err -> error $ show err
-                    Right a  -> return $ mycoardsScale var a
+                    Right arr  -> return $ mycoardsScale var arr
             NcFloat -> do
                 eval <- get info var :: IO (Either NcError (Array F sh CFloat))
                 case eval of
                     Left err -> error $ show err
-                    Right a  -> return $ mycoardsScale var a
+                    Right arr  -> return $ mycoardsScale var arr
             -- Int (< 2147483647) -> Float (<3.e38)
             NcInt   -> do
                 eval <- get info var :: IO (Either NcError (Array F sh CInt))
                 case eval of
                     Left err -> error $ show err
-                    Right a  -> return $ mycoardsScale var a
+                    Right arr  -> return $ mycoardsScale var arr
             -- Short (< 32767) -> Float (3.e38)
             NcShort   -> do
                 eval <- get info var :: IO (Either NcError (Array F sh CShort))
                 case eval of
                     Left err -> error $ show err
-                    Right a  -> return $ mycoardsScale var a
-                                   
-
+                    Right arr  -> return $ mycoardsScale var arr
             -- otherwise
             _       -> error "getReal: not implemented"
 
@@ -137,13 +137,24 @@ mycoardsScale1 v x = let (offset, scale, fill) = triplet v
                                        then nan
                                        else realToFrac $ realToFrac x * scale + offset
 
-triplet :: forall a. (NcStorable a, FromNcAttr a, Real a)
+--- "add_offset" and "scale_factor" can be CFloat or CDouble
+triplet :: forall a. (NcStorable a, FromNcAttr a)
                 => NcVar -> (CDouble, CDouble, Maybe a)
 triplet v = (offset, scale, fill)
-  where offset = fromMaybe 0.0 $
-                 ncVarAttr v "add_offset" >>= fromAttr :: CDouble
-        scale  = fromMaybe 1.0 $
-                 ncVarAttr v "scale_factor" >>= fromAttr :: CDouble
+  where offset' = ncVarAttr v "add_offset"
+        offset = case offset' of
+                   Just (NcAttrDouble _) -> fromMaybe 0.0 (fromAttr . fromJust $ offset')
+                   Just (NcAttrFloat _) -> (realToFrac :: CFloat -> CDouble)
+                                           (fromMaybe 0.0 (fromAttr . fromJust $ offset'))
+                   Just _ -> 0.0
+                   Nothing -> 0.0
+        scale' = ncVarAttr v "scale_factor"
+        scale  = case scale' of
+                   Just (NcAttrDouble _) -> fromMaybe 1.0 (fromAttr . fromJust $ scale')
+                   Just (NcAttrFloat _) -> (realToFrac :: CFloat -> CDouble)
+                                           (fromMaybe 1.0 (fromAttr . fromJust $ scale'))
+                   Just _ -> 1.0
+                   Nothing -> 1.0
         fill   = ncVarAttr v "_FillValue" >>= fromAttr :: Maybe a
 
 --

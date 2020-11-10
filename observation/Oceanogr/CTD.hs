@@ -41,13 +41,15 @@ data Station = Station {
              stnLongitude :: Float,
              stnLatitude  :: Float,
              stnDepth     :: Float,
-             stnTime      :: UnixTime
-            }
+             stnTime      :: UnixTime,
+             stnEXPO      :: B.ByteString
+            } deriving (Eq)
 instance Show Station where
-    show s = printf "stn=%s, cast=%d, lon=%8.4f, lat=%8.4f, depth=%7.1f (%s)"
+    show s = printf "stn=%s, cast=%d, lon=%8.4f, lat=%8.4f, depth=%7.1f (%s) %s"
                     (B.unpack . fst . stnCast $ s) (snd. stnCast $ s)
                     (stnLongitude s) (stnLatitude s) (stnDepth s)
                     (B.unpack $ formatUnixTimeGMT "%d %b %Y %H:%M %z" (stnTime s))
+                    (B.unpack . stnEXPO $ s)
 
 
 data CTDdata = CTDdata {
@@ -75,6 +77,7 @@ data CTDfileRead = CTDfileRead {
             getDepth          :: B.ByteString -> Maybe Float,
             getDate           :: B.ByteString -> Maybe B.ByteString,
             getTime           :: B.ByteString -> Maybe B.ByteString,
+            getEXPO           :: B.ByteString -> Maybe B.ByteString,
             separator         :: B.ByteString -> [Float],
             columnP           :: (Int, Int), -- (value, flag)
             columnT           :: (Int, Int),
@@ -107,6 +110,8 @@ readCTD fname a = do
                         $ (getLast . mconcat) $ map (Last . getDate a) header
         time      = fromMaybe (error $ "Time not found in " ++ fname)
                         $ (getLast . mconcat) $ map (Last . getTime a) header
+        expo      = fromMaybe (error $ "EXPO not found in " ++ fname)
+                        $ (getLast . mconcat) $ map (Last . getEXPO a) header
         maxn      = length body
 
         -- sometimes missing
@@ -153,7 +158,7 @@ readCTD fname a = do
                                else d'
                   Nothing -> V.maximum pres_ + 10
 
-        station   = Station (stnnbr,cast) longitude latitude depth (formTime date time)
+        station   = Station (stnnbr,cast) longitude latitude depth (formTime date time) expo
 
     return $ CTDdata station pres_ temp_ salt_ doxy_ V.empty V.empty V.empty
 
@@ -191,7 +196,7 @@ fillDepth ctd@(CTDdata stn p t s o ct sa pt)
             maxp          = float2Double (V.maximum pgood) + 10.0
          in gsw_z_from_p maxp (float2Double . stnLatitude $ stn) >>= \dep
             -> return $ CTDdata (Station (stnCast stn) (stnLongitude stn) (stnLatitude stn)
-                                         (negate . double2Float $ dep) (stnTime stn))
+                                         (negate . double2Float $ dep) (stnTime stn) (stnEXPO stn))
                                          p t s o ct sa pt
   | otherwise = return ctd
     
@@ -325,11 +330,12 @@ readStnList f = (filter (\(s,_) -> not (B.null s)) . map extractor . filter (not
 --
 printStnList :: CTDdata -> IO ()
 printStnList ctd = let s = ctdStation ctd
-                    in printf "%10s%3d%10.3f%10.3f%10.1f%10.1f  %s\n"
+                    in printf "%10s%3d%10.3f%10.3f%10.1f%10.1f  %s (%s)\n"
                               (B.unpack . fst $ stnCast s) (snd . stnCast $ s)
                               (stnLongitude s) (stnLatitude s) (stnDepth s)
                               (V.maximum . V.filter (not . isNaN) . ctdP $ ctd)
                               (B.unpack $ formatUnixTimeGMT "%d %b %Y %H:%M %z" (stnTime s))
+                              (B.unpack $ stnEXPO $ s)
                             
 --
 -- misc
