@@ -6,7 +6,6 @@
 module Oceanogr.SAM (readSAM) where
 
 import Text.ParserCombinators.Parsec
-import Control.Applicative ((<$>))
 import Data.Array
 
 --

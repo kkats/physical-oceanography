@@ -19,7 +19,7 @@ lsFit1 ::    [Double] -- ^ y
                     -- ^ estimated coefs, sigma, goodness of fit i.e. NR(15.2.12)
 lsFit1 y'' x1'' w'' =
     if not (length y'' == length x1'' && length y'' == length w'')
-    then error "lsFit2(): inconsistent input"
+    then error "lsFit1(): inconsistent input"
     else let y = tr $ fromLists [y'']
              x = tr $ fromLists [x1'']
              w = sym $ diagRect 0.0 (fromList w'') (length w'') (length w'')
