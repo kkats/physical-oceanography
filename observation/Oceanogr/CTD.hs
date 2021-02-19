@@ -19,10 +19,10 @@ import qualified Data.Vector.Unboxed.Mutable as VM
 import Control.Monad (unless, when)
 import Data.Attoparsec.ByteString (parseOnly)
 import Data.Attoparsec.ByteString.Char8 (double, signed, decimal)
-import Data.Char   (isSpace)
+import Data.Char   (isSpace, isDigit)
 import Data.List   (findIndex, minimumBy)
 import Data.Maybe  (fromMaybe, isNothing)
-import Data.Monoid (mconcat, Last(..))
+import Data.Monoid (Last(..))
 import Data.UnixTime
 import GHC.Float (double2Float, float2Double)
 import Numeric.IEEE (nan)
@@ -44,6 +44,7 @@ data Station = Station {
              stnTime      :: UnixTime,
              stnEXPO      :: B.ByteString
             } deriving (Eq)
+
 instance Show Station where
     show s = printf "stn=%s, cast=%d, lon=%8.4f, lat=%8.4f, depth=%7.1f (%s) %s"
                     (B.unpack . fst . stnCast $ s) (snd. stnCast $ s)
@@ -51,6 +52,15 @@ instance Show Station where
                     (B.unpack $ formatUnixTimeGMT "%d %b %Y %H:%M %z" (stnTime s))
                     (B.unpack . stnEXPO $ s)
 
+-- can be ordered by station names
+instance Ord Station where
+   a `compare` b = let (sa, ca) = stnCast a
+                       (sb, cb) = stnCast b
+                    in if sa == sb
+                         then ca `compare` cb
+                         else if B.all isDigit sa && B.all isDigit sb
+                                then si sa `compare` si sb
+                                else sa `compare` sb
 
 data CTDdata = CTDdata {
              ctdStation :: Station,
@@ -79,10 +89,10 @@ data CTDfileRead = CTDfileRead {
             getTime           :: B.ByteString -> Maybe B.ByteString,
             getEXPO           :: B.ByteString -> Maybe B.ByteString,
             separator         :: B.ByteString -> [Float],
-            columnP           :: (Int, Int), -- (value, flag)
-            columnT           :: (Int, Int),
-            columnS           :: (Int, Int),
-            columnDO          :: (Int, Int),
+            columnP           :: Maybe (Int, Int), -- (value, flag)
+            columnT           :: Maybe (Int, Int),
+            columnS           :: Maybe (Int, Int),
+            columnDO          :: Maybe (Int, Int),
             goodFlags         :: [Int]
         }
 
@@ -353,13 +363,13 @@ formTime date time = parseUnixTimeGMT "%Y%m%d%H%M" (date `B.append` time) -- ass
 
 choose :: CTDitem -> CTDfileRead -> [Float] -> Float
 choose item a ws = let (vc, fc) = case item of
-                                    P -> columnP a
-                                    T -> columnT a
-                                    S -> columnS a
-                                    DO -> columnDO a
+                                    P -> maybe (-1,-1) id (columnP a)
+                                    T -> maybe (-1,-1) id (columnT a)
+                                    S -> maybe (-1,-1) id (columnS a)
+                                    DO -> maybe (-1,-1) id (columnDO a)
                                     _  -> error "choose: not implemented"
-                       value    = ws !! vc
-                       flag     = round $ ws !! fc
+                       value    = if vc < 0 then nan else ws !! vc
+                       flag     = if fc < 0 then (-1) else round $ ws !! fc
                     in if flag `elem` goodFlags a
                          then value
                          else nan
