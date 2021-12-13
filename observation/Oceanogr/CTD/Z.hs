@@ -15,6 +15,7 @@ import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sigma1, gsw_sa_from_sp, gsw_sigma2,
 import Oceanogr.CTD
 
 import Control.Monad (when)
+import Data.List (zip5, unzip5)
 import qualified Data.Vector.Unboxed as V
 import GHC.Float (double2Float, float2Double)
 import Numeric.IEEE (nan)
@@ -113,9 +114,15 @@ gOnP' ctd = gOnP_ ctd >>= \(phere, ghere, _, _, _)
 
 -- interpolated
 zOnG item ctd g = do
-    (phere, ghere, there, shere, ohere) <- gOnP_ ctd
+    (phere', ghere', there', shere', ohere') <- gOnP_ ctd
+
+    let (phere, ghere, there, shere, ohere) = unzip5
+                                            $ filter (\(_,g',_,_,_) -> g' > 0)
+                                            $ zip5 phere' ghere' there' shere' ohere'
+
     let g' = V.toList . V.map float2Double $ g
         n  = Prelude.length shere
+    
     (sns', tns', pns', dsns', dtns', dpns')
                     <- neutral_surfaces shere there phere ghere n g' (V.length g)
     let sns = cleansen sns' dsns'
