@@ -22,7 +22,7 @@ import Oceanogr.GSW (gsw_f)
 import Oceanogr.GSWtools (gsw_nsquared)
 
 import qualified Data.Vector.Unboxed as V
-import Control.Monad (when, mapM_)
+import Control.Monad (when)
 import Data.List (sortOn, zip5)
 import Data.Maybe (isJust, fromJust, fromMaybe)
 import Data.Ord (comparing)
@@ -40,7 +40,7 @@ data Segment = Segment {
 } deriving (Show, Eq)
 
 data FSPout = FSPout {
-                getN2mean:: Double, -- ^ mean squared buoyancy frequency [1/s2]
+                getN2mean :: Double, -- ^ mean squared buoyancy frequency [1/s2]
                 getN1mean :: Double, -- ^ mean buoyancy frequency [1/s]
                 getEhat   :: Double, -- ^ nondimensional gradient spectral level
                 getRw     :: Double, -- ^ shear to strain ratio
@@ -319,6 +319,8 @@ calcEps lat (FSPout n2mean n1mean ehat rw mc _ ud)
           f    = abs $ gsw_f lat
           h    = 3 * (rw + 1) / (4 * rw) * sqrt(2 / (rw - 1))
                    * (acosh (n1mean / f) / acosh (n0 / f0))
+          prod = 8e-10 * (f / f0) * (n2mean / n0^2) * ehat^2 * h
+{-
           --
           -- Ijichi and Hibiya (2015)
           --
@@ -329,8 +331,8 @@ calcEps lat (FSPout n2mean n1mean ehat rw mc _ ud)
           h'   = if rw <= 9
                    then 3 * (rw + 1) / (4 * rw) * (l1 / l0) * rw ** (-l2)
                    else 3 * (rw + 1) / (4 * rw) * (1 / l0) * sqrt(2 / (rw - 1))
-          --
           prod = 8e-10 * (f / f0) * (n2mean / n0^2) * ehat^2 * h'
+-}
        in FSPout n2mean n1mean ehat rw mc (prod * 0.83) ud -- 0.83 = 1 - Rf -- (4)(5)
 
 --

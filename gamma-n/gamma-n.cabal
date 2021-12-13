@@ -9,7 +9,7 @@ license-file:        LICENSE
 maintainer:          k.katsumata@jamstec.go.jp
 -- copyright:           
 -- category:            
-build-type:          Custom
+build-type:          Simple
 extra-source-files:  fortran/patch.gamma
 cabal-version:       >=1.10
 
