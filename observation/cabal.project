@@ -1,0 +1,7 @@
+with-compiler: ghc-8.10.7
+
+packages:
+  ./
+
+allow-older: none
+allow-newer: none
