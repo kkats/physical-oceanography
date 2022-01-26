@@ -103,6 +103,10 @@ readCTD :: FilePath -> CTDfileRead -> IO CTDdata
 readCTD fname a = do
 
     c <- B.readFile fname -- file is so small that we rely on laziness
+
+    -- mapM_ (\l -> let b = if (isHeaderLastLine a) l then 'T' else 'F'
+    --                  in printf "%c: %s\n" b (B.unpack l)) (B.lines c)
+
     let (header, body') = break (isHeaderLastLine a) (B.lines c)
         body            = if null body'
                             then error $ "readCTD(): HeaderLastLine not found in " ++ fname
@@ -240,7 +244,7 @@ gammanCTD ctd = do
                        $ zip dglo' dghi'
         nall  = length gamma'
 
-    when (nmiss > 0) $ hPrintf stderr "Ocenaogr.CTD.gammanCTD: %d/%d missing\n" nmiss nall
+    when (nmiss > 0) $ hPrintf stderr "Oceanogr.CTD.gammanCTD: %d/%d missing\n" nmiss nall
     when (nbaad > 0) $ hPrintf stderr "Oceanogr.CTD.gammanCTD: %d/%d with error > 0.01\n" nbaad nall
     when (nbad > 0) $ hPrintf stderr "Ocenaogr.CTD.gammanCTD: %d/%d with error > 0.001\n" nbad nall
     let takeGood :: [Bool] -> [Double] -> [Double] -> [Double] -- reverse of (***)
@@ -326,14 +330,15 @@ abscissaCTD ctds' list =
 -- use the first two columns as Cast (i.e. stnnbr and cast) for plotting
 --
 readStnList :: FilePath -> IO [Cast]
-readStnList f = (filter (\(s,_) -> not (B.null s)) . map extractor . filter (not . isComment) . B.lines) `fmap` B.readFile f
+readStnList f = (filter (\(s,_) -> not (B.null s)) . map extractor
+               . filter (not . isComment) . B.lines) `fmap` B.readFile f
   where
     extractor :: B.ByteString -> Cast
     extractor ll = let ws = B.words ll
                     in if length ws > 1 then (head ws, si $ ws !! 1)
                                         else ("", 0)
     isComment :: B.ByteString -> Bool
-    isComment ll = B.length ll > 1 && B.head ll == '#'
+    isComment ll = B.length ll > 0 && B.head ll == '#'
 
 --
 -- print

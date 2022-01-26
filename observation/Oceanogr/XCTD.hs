@@ -150,6 +150,7 @@ readXCTD expo fname = do
                               o  = w0 !! 2
                               s  = w0 !! 3 
                            in do
+#define PRESSURE
 #ifdef PRESSURE
                             p <- gsw_p_from_z (negate . float2Double . sf $ d) (float2Double latitude)
                             VM.write prs' n (double2Float p) -- pressure

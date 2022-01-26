@@ -96,7 +96,9 @@ library
                        statistics,
                        transformers,
                        vector,
-                       hstatistics
+                       hstatistics,
+                       GSW, gamma-n
+  -- Oceanogr.CARS depends on GSW and gamma-n
   
   -- Directories containing source files.
   -- hs-source-dirs:      
