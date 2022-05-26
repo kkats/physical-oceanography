@@ -1,7 +1,7 @@
 --
 -- | CARS 2009 data
 --
-module Oceanogr.CARS (accessCARS)
+module Oceanogr.CARS (accessCARS, readCARSmean, readCARS)
 where
 
 import Oceanogr.GSWtools (gsw_sa_from_sp, gsw_ct_from_t)
@@ -56,10 +56,15 @@ interp2 xs' ys' zs' (xd', yd')
        
 -- | read CARS only the mean (... at the moment)
 --
+readCARSmean :: FilePath -> IO (Array U DIM1 Double, Array U DIM1 Double,
+                                Array U DIM1 Double, Array U DIM3 Double)
+readCARSmean carsfile = readCARS carsfile "mean"
+
 readCARS :: FilePath -- ^ Either temperature_cars2009a.nc or salinity_cars2009a.nc
+    -> String        -- ^ what to read
     -> IO (Array U DIM1 Double, Array U DIM1 Double, Array U DIM1 Double,
            Array U DIM3 Double) -- ^(lon, lat, depth, T/S)
-readCARS carsfile = do
+readCARS carsfile item = do
     info' <- openFile carsfile
     case info' of
         Left err   -> error $ show err
@@ -67,7 +72,7 @@ readCARS carsfile = do
             dep' <- getReal info "depth" :: IO (Array F DIM1 CFloat)
             lat' <- getReal info "lat" :: IO (Array F DIM1 CFloat)
             lon' <- getReal info "lon" :: IO (Array F DIM1 CFloat)
-            var' <- getReal info "mean" :: IO (Array F DIM3 CDouble)
+            var' <- getReal info item :: IO (Array F DIM3 CDouble)
             closeFile info
 
             let dep = computeUnboxedS $ Repa.map realToFrac dep'
@@ -98,16 +103,29 @@ unig (o:os) (x:xs) out = if o then unig os xs (x:out)
 --   returns 2 functions to access CARS data
 --
 accessCARS :: (Double, Double, Double, Double) -- ^ N, E, S, W lat/lon's
-        -> IO (Array U DIM1 Double, Array U DIM1 Double, Array U DIM1 Double,
-                -- ^ lon, lat, depth
-               [Double] -- IN: gamma levels, OUT: isopycnal depth, CT, SA
-               -> IO (Array U DIM3 Double, Array U DIM3 Double, Array U DIM3 Double),
-               Loc Double -- IN: location, OUT: CT profile and SA profile, gamma
-               -> IO (V.Vector Double, V.Vector Double, V.Vector Double))
+        -> IO (Array U DIM1 Double, -- ^ lon
+               Array U DIM1 Double, -- ^ lat
+               Array U DIM1 Double, -- ^ depth
+               -- gridded on isopycnals
+               [Double]      -- ^ gamma levels
+               -> IO (Array U DIM3 Double, -- ^ isopycnal depth
+                      Array U DIM3 Double, -- ^ CT
+                      Array U DIM3 Double), -- ^ SA
+               -- profile at one station
+               Loc Double    -- ^ location, OUT: CT profile and SA profile, gamma
+               -> IO (V.Vector Double, -- ^ CT profile
+                      V.Vector Double, -- ^ SA profile
+                      V.Vector Double), -- ^ gamma
+               -- profile exactly on grid point w/o interp2
+               Loc Double    -- ^ location, OUT: CT profile and SA profile, gamma
+               -> IO (V.Vector Double, -- ^ CT profile
+                      V.Vector Double, -- ^ SA profile
+                      V.Vector Double) -- ^ gamma
+              )
 accessCARS (boundN, boundE, boundS, boundW) = do
 
-    (long', lati', dept, salt') <- readCARS "/local/data/CARS/salinity_cars2009a.nc"
-    (_,    _,     _,     temp') <- readCARS "/local/data/CARS/temperature_cars2009a.nc"
+    (long', lati', dept, salt') <- readCARSmean "/local/data/CARS/salinity_cars2009a.nc"
+    (_,    _,     _,     temp') <- readCARSmean "/local/data/CARS/temperature_cars2009a.nc"
 
     let (_:. k1 :. _ :. _) = extent salt'
 
@@ -193,17 +211,18 @@ accessCARS (boundN, boundE, boundS, boundW) = do
             return (ct8, sa8, pn8)
 
         --
-        prof :: Loc Double -> IO (V.Vector Double, V.Vector Double, V.Vector Double)
+        prof, prof' :: Loc Double -> IO (V.Vector Double, V.Vector Double, V.Vector Double)
                             -- ^ CT, SA, gamma-n
+        -- anywhere with interp2
         prof location = do
             let lo = getLon location
                 la = getLat location
 
                 (t3, s3) =  V.unzip
                          $  V.map (\k -> let temp2 = computeUnboxedS
-                                                    $ slice temp (Any :. k :. All :. All)
+                                                    $ slice temp (Z :. k :. All :. All)
                                              salt2 = computeUnboxedS
-                                                    $ slice salt (Any :. k :. All :. All)
+                                                    $ slice salt (Z :. k :. All :. All)
                                              t2 = interp2 long lati temp2 (lo, la)
                                              s2 = interp2 long lati salt2 (lo, la)
                                          in (t2, s2)) (V.fromList [0 .. (k1-1)])
@@ -211,7 +230,34 @@ accessCARS (boundN, boundE, boundS, boundW) = do
                 t4 = snd . V.unzip . V.filter fst $ V.zip ig t3
                 s4 = snd . V.unzip . V.filter fst $ V.zip ig s3
                 p4 = snd . V.unzip . V.filter fst $ V.zip ig (toUnboxed dept)
-            if (V.all (not . id) ig)
+            if (V.all not ig)
+              then let nans = V.replicate k1 nan
+                    in return (nans, nans, nans)
+              else do
+                (g4, _dl4, _dh4) <- gamma_n (V.toList s4) (V.toList t4) (V.toList p4) (V.length p4) (lo, la)
+                sa4 <- V.mapM (\(s',p') -> gsw_sa_from_sp s' p' lo la) $ V.zip s4 p4
+                ct4 <- V.mapM (\(s',t',p') -> gsw_ct_from_t s' t' p') $ V.zip3 sa4 t4 p4
+                let ct5 = V.fromList $ unig (V.toList ig) (V.toList ct4) []
+                    sa5 = V.fromList $ unig (V.toList ig) (V.toList sa4) []
+                    gn5 = V.fromList $ unig (V.toList ig) g4 []
+                    gn6 = V.map (\g' -> if g' < 0 then nan else g') gn5
+                return (ct5, sa5, gn6)
+        -- exactly on grid w/o interp2
+        prof' location = do
+            let lo = getLon location
+                la = getLat location
+
+                (i1, _) = V.minimumBy (\(_,a) (_,b) -> abs (a - lo) `compare` abs (b - lo))
+                         (V.indexed . toUnboxed $ long)
+                (j1, _) = V.minimumBy (\(_,a) (_,b) -> abs (a - la) `compare` abs (b - la))
+                         (V.indexed . toUnboxed $ lati)
+                t3 = toUnboxed $ computeUnboxedS $ slice temp (Z:. All :. j1 :. i1)
+                s3 = toUnboxed $ computeUnboxedS $ slice salt (Z:. All :. j1 :. i1)
+                ig = V.zipWith (\t' s' -> if isNaN (t' + s') then False else True) t3 s3
+                t4 = snd . V.unzip . V.filter fst $ V.zip ig t3
+                s4 = snd . V.unzip . V.filter fst $ V.zip ig s3
+                p4 = snd . V.unzip . V.filter fst $ V.zip ig (toUnboxed dept)
+            if (V.all not ig)
               then let nans = V.replicate k1 nan
                     in return (nans, nans, nans)
               else do
@@ -224,4 +270,4 @@ accessCARS (boundN, boundE, boundS, boundW) = do
                     gn6 = V.map (\g' -> if g' < 0 then nan else g') gn5
                 return (ct5, sa5, gn6)
 
-    return (long, lati, dept, onGamma, prof)
+    return (long, lati, dept, onGamma, prof, prof')
