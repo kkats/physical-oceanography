@@ -104,8 +104,9 @@ readCTD fname a = do
 
     c <- B.readFile fname -- file is so small that we rely on laziness
 
-    -- mapM_ (\l -> let b = if (isHeaderLastLine a) l then 'T' else 'F'
-    --                  in printf "%c: %s\n" b (B.unpack l)) (B.lines c)
+    --mapM_ (\l -> if (isHeaderLastLine a) l
+    --              then printf "OK\n"
+    --              else mapM_ (printf "%c") (B.unpack l)) (B.lines c)
 
     let (header, body') = break (isHeaderLastLine a) (B.lines c)
         body            = if null body'
@@ -284,7 +285,6 @@ sectionCTD :: [CTDdata] -> [Cast]
                                                             -- (raw data -> z -> profile)
             -> IO (V.Vector Float)                                -- ^ data in 2D
 sectionCTD ctds list z prof = do
-
     let nx   = length list
         stns = map (\m -> findIdxfromCast ctds (list !! m)) [0 .. (nx-1)]
         nz   = V.length z
@@ -358,10 +358,12 @@ printStnList ctd = let s = ctdStation ctd
 
 -- returns index
 findIdxfromCast :: [CTDdata] -> Cast -> Int
-findIdxfromCast ctds cast = fromMaybe (error "findCTDfromCast: no such cast")
+findIdxfromCast ctds cast = fromMaybe (error $ "findCTDfromCast: no such cast; " ++ show cast)
                                       (findIndex (\ctd -> (stnCast . ctdStation) ctd == cast) ctds)
+
 findCTDfromCast :: [CTDdata] -> Cast -> CTDdata
 findCTDfromCast ctds cast = ctds !! findIdxfromCast ctds cast
+
 
 formTime :: B.ByteString -> B.ByteString -> UnixTime
 formTime date time = parseUnixTimeGMT "%Y%m%d%H%M" (date `B.append` time) -- assuming GMT
@@ -397,6 +399,7 @@ findCommon dx (ws, ctdws) (gs, ctdgs)
                                                       gsw_distance
                                                         (putLoc lonB latB) (putLoc lon lat))
                                 (zip3 gs long latg)) ws
+
      in filter (\(w,g) -> let (ow,aw) = cast2lonlat ctdws w
                               (og,ag) = cast2lonlat ctdgs g
                            in gsw_distance (putLoc ow aw) (putLoc og ag) < dx) $ zip ws cast0
