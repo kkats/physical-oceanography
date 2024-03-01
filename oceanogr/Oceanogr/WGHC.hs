@@ -24,7 +24,7 @@ import System.FilePath ((</>))
 -- import Debug.Trace
 
 dataDir :: FilePath
-dataDir = "/data/pub/WGHC/WGHCGRD/"
+dataDir = "/local/data/WGHC/WGHCGRD/"
 
 dataFiles :: [FilePath]
 dataFiles = ["wghc0000-0595",

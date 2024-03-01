@@ -108,9 +108,9 @@ accessCARS :: (Double, Double, Double, Double) -- ^ N, E, S, W lat/lon's
                Array U DIM1 Double, -- ^ depth
                -- gridded on isopycnals
                [Double]      -- ^ gamma levels
-               -> IO (Array U DIM3 Double, -- ^ isopycnal depth
-                      Array U DIM3 Double, -- ^ CT
-                      Array U DIM3 Double), -- ^ SA
+               -> IO (Array U DIM3 Double, -- ^ CT
+                      Array U DIM3 Double, -- ^ SA
+                      Array U DIM3 Double), -- ^ isopycnal depth
                -- profile at one station
                Loc Double    -- ^ location, OUT: CT profile and SA profile, gamma
                -> IO (V.Vector Double, -- ^ CT profile

@@ -22,7 +22,8 @@ import qualified Data.Vector.Unboxed as U
 -- import Text.Printf (printf)
 
 dataFile :: FilePath
-dataFile = "/data/pub/ETOPO/ETOPO5.DOS" -- Little Endian, 16 byte Int
+-- dataFile = "/data/pub/ETOPO/ETOPO5.DOS" -- Little Endian, 16 byte Int
+dataFile = "/local/data/pub/ETOPO5.DOS"
 
 dEtopo5 :: Double -- grid interval
 dEtopo5 = 1.0 / 12.0

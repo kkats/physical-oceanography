@@ -74,7 +74,6 @@ lsFit2dangerous y'' x1'' _ =
 
 --
 -- | Least squares with 2 inputs
--- | use IO version of ols
 --
 lsFit3 ::    [Double] -- ^ y
           -> [Double] -- ^ x(:,1)
