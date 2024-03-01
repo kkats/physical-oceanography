@@ -3,6 +3,7 @@
 module Oceanogr.GammaN (
             gamma_n,
             neutral_surfaces,
+            gamma_n1
            )
 where
 
@@ -11,7 +12,8 @@ import Foreign.Marshal.Alloc (alloca, free)
 import Foreign.Marshal.Array (mallocArray, withArray, peekArray)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (poke)
----
+import Numeric.IEEE (nan)
+
 --- neutral surface
 ---
 gamma_n :: [Double] -- salinity
@@ -40,6 +42,42 @@ gamma_n s t p n (lon, lat) = do
     dghi' <- dbl `fmap` peekArray n dghi
     free gamm >> free dglo >> free dghi
     return (gamm', dglo', dghi')
+
+---
+--- can handle NaN in the input
+--- suffix 1 for "just 1 output"
+---
+gamma_n1 :: [Double] -- salinity
+         -> [Double] -- temperature
+         -> [Double] -- presure
+         -> Int      -- n
+         -> (Double, Double) -- (lon, lat)
+         -> IO [Double]
+gamma_n1 s t p n here = 
+        let flag = map (\(s',t',p') -> if (isNaN $ s'+t'+p')
+                                         then False
+                                         else True) (zip3 s t p)
+            pick :: [Double] -> [Double]
+            pick = snd . unzip . filter fst . zip flag
+
+            unpick :: [Double] -> [Double]
+            unpick x = unpick' flag x []
+            unpick' :: [Bool] -> [Double] -> [Double] -> [Double]
+            unpick' [] _ out = reverse out
+            unpick' (f':fs) (x:xs) out = if f' then unpick' fs xs (x:out)
+                                               else unpick' fs (x:xs) (nan:out)
+            unpick' (f':fs) [] out     = if f' then error "gamma_n1: pattern"
+                                               else unpick' fs [] (nan:out)
+
+         in if all not flag
+              then return $ replicate n nan
+              else do
+                (g', _l', _h') <- gamma_n (pick s) (pick t) (pick p) 
+                                          (length $ filter id flag)
+                                          here
+                let g = unpick g' -- Could add some criteria for l' and h'
+                 in return $ map (\g'' -> if isNaN g'' || g'' < -90 then nan else g'') g
+
 
 cdbl' :: Double -> CDouble
 cdbl' = realToFrac
