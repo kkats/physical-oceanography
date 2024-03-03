@@ -77,7 +77,3 @@ sinkFileByAppend fname = sinkIOHandle (IO.openBinaryFile fname IO.AppendMode)
 appendVecF :: FilePath -> V.Vector Float -> IO ()
 appendVecF fname  v = let go' = yieldMany v .| conduitPut putFloat32be .| sinkFileByAppend fname
                        in runResourceT $ runConduit go'
-
--- obsolete
--- readMatF :: forall sh. (Shape sh) => FilePath -> sh -> IO (Array F sh Float)
--- writeMatF :: forall sh. (Shape sh) => FilePath -> Array U sh Float -> IO ()

@@ -124,7 +124,10 @@ inbetween ruler here
             then Nothing
             else U.findIndex (\(p,q) -> p*q <= 0.0) $ U.zip ruler' (U.tail ruler')
 {-# INLINE inbetween #-}
+--
 -- this "Cyclic" does NOT always work. Designated to be used only with interp2 above.
+-- Do NOT export
+--
 inbetweenCyclic ruler here
     | maxr < here = inbetweenCyclic ruler (here - cycle')
     | minr > here = inbetweenCyclic ruler (here + cycle')
@@ -151,15 +154,3 @@ inbetweenFence ruler here
 --   no boundary check
 idx2sub :: Int {- idx-} -> Int {- IM -} -> (Int, Int) {- (j,i) -}
 idx2sub = quotRem 
-
---- obsolete
-{-
-closest' :: (U.Unbox a, Fractional a, Ord a) => U.Vector a -> a -> Int
-closest' ruler here
-    = let (_, _, minl) = U.foldl' (\(i, min', minloc) x
-                                        -> if (abs $ x - here) < min'
-                                             then (i+1, (abs $ x - here), i)
-                                             else (i+1, min', minloc))
-                         (0, 9.0e99, -9) ruler
-      in minl
--}
