@@ -1,7 +1,10 @@
-with-compiler: ghc-8.10.7
+with-compiler: ghc-9.2.8
 
 packages:
-  ./
+  ./,
+  ../oceanogr/,
+  ../gamma-n/,
+  ../../GSW-Haskell/
 
 allow-older: none
 allow-newer: none

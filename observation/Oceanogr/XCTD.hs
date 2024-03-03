@@ -104,7 +104,7 @@ pressure :: (Double, Double) -- ^ longitude, latitude
          -> IO (V.Vector Double) -- ^ pressure
 pressure (lon, lat) t s d = do
     (rho, g) <- V.unzip `fmap` (V.mapM (\(t0, s0, d0) -> do
-                                    p0 <- gsw_p_from_z (negate d0) lat -- tentative
+                                    p0 <- gsw_p_from_z (negate d0) lat 0 0 -- tentative
                                     sa <- gsw_sa_from_sp s0 p0 lon lat
                                     ct <- gsw_ct_from_t sa t0 p0
                                     r  <- gsw_rho sa ct p0
@@ -152,7 +152,7 @@ readXCTD expo fname = do
                            in do
 #define PRESSURE
 #ifdef PRESSURE
-                            p <- gsw_p_from_z (negate . float2Double . sf $ d) (float2Double latitude)
+                            p <- gsw_p_from_z (negate . float2Double . sf $ d) (float2Double latitude) 0 0
                             VM.write prs' n (double2Float p) -- pressure
 #else
                             VM.write prs' n (sf d)           -- depth

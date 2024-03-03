@@ -1,3 +1,5 @@
+-- Modules useful analysis of observed data
+-- also those modules which depend on GSW and/or gamma-n
 name:                observation
 -- The package version.  See the Haskell package versioning policy (PVP) 
 -- for standards guiding when and how versions should be incremented.
@@ -5,13 +7,12 @@ name:                observation
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.2.1.1
+version:             0.3.0.0
 -- synopsis:            
 -- description:         Please see README.md
 license:             OtherLicense
 license-file:        LICENSE
--- author:              kkats
-maintainer:          k.katsumata@jamstec.go.jp
+maintainer:          katsumata@eps.s.u-tokyo.ac.jp
 build-type:          Simple
 extra-source-files:  example/MakeList.hs
                      example/SBEproc.hs
@@ -19,23 +20,27 @@ extra-source-files:  example/MakeList.hs
 cabal-version:       >=1.10
 
 library
-  ghc-options:         -Wall -O2
   other-extensions:    OverloadedStrings
   exposed-modules:     Oceanogr.CTD,
                        Oceanogr.CTD.Z,
                        Oceanogr.LADCP,
                        Oceanogr.FSparam,
                        Oceanogr.XCTD,
-                       Oceanogr.CtoS
+                       Oceanogr.CtoS,
+                       Oceanogr.CARS,
+                       Oceanogr.Bottle
   build-depends:       base,
                        oceanogr,
                        attoparsec,
                        bytestring,
+                       cassava,
                        filepath,
+                       hnetcdf,
                        ieee754,
+                       repa,
                        unix-time,
                        vector,
                        vector-algorithms,
-                       GSW,
-                       gamma-n
+                       GSW, gamma-n
   default-language:    Haskell2010
+  ghc-options:         -Wall -O2

@@ -17,7 +17,7 @@ gridSizeOf
 import Oceanogr.CTD
 import Oceanogr.LADCP
 import Oceanogr.PSD (psd, psdvel)
-import Oceanogr.LeastSquare (lsFit3)
+import Oceanogr.LeastSquares (lsFit3)
 import Oceanogr.GSW (gsw_f)
 import Oceanogr.GSWtools (gsw_nsquared)
 
@@ -88,9 +88,8 @@ bfreqBG seg ctd gamman = do
     --
     let x          = map (subtract $ 0.5 * (head pmid + last pmid)) pmid
         x2         = map (^2) x
-        (c', _, _) = lsFit3 n2 x2 x (replicate (n-1) 1)
-        c          = concat c'
-        n2fit      = zipWith (+) (map (* head c) x2) (map (\x0 -> x0 * (c !! 1) + last c) x)
+        ((c0, c1, c2), _, _) = lsFit3 (V.fromList n2) (V.fromList x2) (V.fromList x) Nothing
+        n2fit      = zipWith (+) (map (* c0) x2) (map (\x0 -> x0 * c1 + c2) x)
 
     return (V.fromList pmid, V.fromList n2, V.fromList n2fit)
 
@@ -119,12 +118,11 @@ strainPSD n2m dp n2' = do
 
     let strain = V.map (/ n2m) n2'
 
-    -- (freq', pow', c') <- psd 1 2 (V.toList strain)
-    (freq', pow', c') <- psd 1 1 (V.toList strain)
+    -- (freq', pow', c') <- psd 1 2 strain
+    (freq', pow', c) <- psd 1 1 strain
 
-    let freq = V.map (* (2 * 3.14159265 / dp)) . V.fromList $ freq'
-        pow  = V.map (/ (2 * 3.14159265 / dp)) . V.fromList $ pow'
-        c   = (head c', last c')
+    let freq = V.map (* (2 * 3.14159265 / dp)) freq'
+        pow  = V.map (/ (2 * 3.14159265 / dp)) pow'
 
     return (freq, pow, c, strain)
 
@@ -143,20 +141,19 @@ shearPSD seg ladcp = do
         u' = inSegment seg (ladcpZ ladcp) (ladcpU ladcp)
         v' = inSegment seg (ladcpZ ladcp) (ladcpV ladcp)
         z  = V.map float2Double z'
-        u  = V.toList . V.map float2Double $ u'
-        v  = V.toList . V.map float2Double $ v'
+        u  = V.map float2Double $ u'
+        v  = V.map float2Double $ v'
         dz = gridSizeOf z
 
     when (V.null z') $ error "shearPSD: Segment out of bound"
 
     -- (f', ke', cw', ccw', cc') <- psdvel 1 2 u v
-    (f', ke', cw', ccw', cc') <- psdvel 1 1 u v
+    (f', ke', cw', ccw', cc) <- psdvel 1 1 u v
 
-    let f   = V.map (* (2 * 3.14159265 / dz)) . V.fromList $ f'
-        ke  = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ ke'
-        cw  = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ cw'
-        ccw = V.map (/ (2 * 3.14159265 / dz)) . V.fromList $ ccw'
-        cc  = (head cc', last cc')
+    let f   = V.map (* (2 * 3.14159265 / dz)) f'
+        ke  = V.map (/ (2 * 3.14159265 / dz)) ke'
+        cw  = V.map (/ (2 * 3.14159265 / dz)) cw'
+        ccw = V.map (/ (2 * 3.14159265 / dz)) ccw'
         ts  = toShear f
 
     return (f, ts ke, ts cw, ts ccw, cc)

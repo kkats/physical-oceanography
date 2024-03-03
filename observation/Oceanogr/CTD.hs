@@ -209,7 +209,7 @@ fillDepth ctd@(CTDdata stn p t s o ct sa pt)
         let (pgood, _, _) = V.unzip3 $ V.filter (\(p0,t0,s0) -> not . isNaN $ p0 + t0 + s0)
                                      $ V.zip3 p t s
             maxp          = float2Double (V.maximum pgood) + 10.0
-         in gsw_z_from_p maxp (float2Double . stnLatitude $ stn) >>= \dep
+         in gsw_z_from_p maxp (float2Double . stnLatitude $ stn) 0 0 >>= \dep
             -> return $ CTDdata (Station (stnCast stn) (stnLongitude stn) (stnLatitude stn)
                                          (negate . double2Float $ dep) (stnTime stn) (stnEXPO stn))
                                          p t s o ct sa pt
