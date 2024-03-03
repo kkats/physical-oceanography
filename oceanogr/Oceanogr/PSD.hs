@@ -5,9 +5,9 @@
 --
 --
 module Oceanogr.PSD (psd, psdvel, psd', psdvel') where
-import Oceanogr.LeastSquare           (lsFit2dangerous)
+import Oceanogr.LeastSquares
 
-import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Unboxed as V
 import Control.Applicative   (liftA3)
 import Control.Monad         (when, forM)
 import Data.Array.CArray     (createCArray, Array, elems)
@@ -62,7 +62,7 @@ ci :: Double -- ^ confidence interval
     -> Int -- ^ number of frequency binning
     -> Int -- ^ length of one section
     -> Int -- ^ number of zero padding
-    -> [Double]
+    -> (Double, Double)
 ci confi nb ns len nz =
     let dof :: Double
         dof = 2 * fromIntegral nb
@@ -70,35 +70,35 @@ ci confi nb ns len nz =
                 * dofWindow
         dn  = (1.0 - confi) / 2
         up  = 1.0 - (1.0 - confi) / 2
-     in map ((\c' -> dof / c') . quantileChiSquared dof) [up, dn]
+        cc  = map ((\c' -> dof / c') . quantileChiSquared dof) [up, dn]
+     in (cc !! 0, cc !! 1)
 
 slicer :: Int -- ^ number of sections
        -> Int -- ^ required section (1 (one ... not zero!) for the first section)
-       -> VU.Vector Double -- ^ input
-       -> (VU.Vector Double, Int) -- ^ output and number of zero padding
-slicer ns i x = let n = VU.length x
+       -> V.Vector Double -- ^ input
+       -> (V.Vector Double, Int) -- ^ output and number of zero padding
+slicer ns i x = let n = V.length x
                     k' = n `quot` ns -- length of one section
                     (k, nz) = if n `rem` ns == 0 -- number of zero padding
                                 then (k', 0)
                                 else (k'+1, ns - n `rem` ns)
-                 in if i < ns then (VU.slice ((i-1)*k) k x, nz)
+                 in if i < ns then (V.slice ((i-1)*k) k x, nz)
                               else let from = (i - 1) * k
                                        to   = n - 1
                                        zlen = to - from + 1
-                                    in (VU.slice from zlen x VU.++ VU.replicate nz 0, nz)
+                                    in (V.slice from zlen x V.++ V.replicate nz 0, nz)
 psd = psd' 0.95
 psd' :: Double                 -- ^ confidence interval
     -> Int                     -- ^ number of sections
     -> Int                     -- ^ number of freq binning
-    -> [Double]                -- ^ input
-    -> IO ([Double], [Double], [Double]) -- ^ frequency, power, 95% confidence interval
-psd' confi ns nb x' = do
-    let x  = VU.fromList x'
-        (_, nz) = slicer ns 1 x
-        k  = (VU.length x - nz) `div` ns
+    -> V.Vector Double         -- ^ input
+    -> IO (V.Vector Double, V.Vector Double, (Double, Double)) -- ^ frequency, power, 95% confidence interval
+psd' confi ns nb x = do
+    let (_, nz) = slicer ns 1 x
+        k  = (V.length x - nz) `div` ns
         k2 = if even k then k `div` 2 + 1 else (k+1) `div` 2 -- see (***)
 
-    when (nz /= 0) $ hPutStrLn stderr ("PSD.psd: zero padding " ++ show nz)
+    when (nz /= 0) $ hPutStrLn stderr ("Oceanogr.PSD.psd: zero padding " ++ show nz)
 
     pow'' <- forM [1 .. ns] $ \i -> let (xin, _) = slicer ns i x
                                      in psdWindow (detrend xin)
@@ -106,14 +106,14 @@ psd' confi ns nb x' = do
     -- section averaging
     -- try to be strict with monad
     pow' <- forM [0 .. (k2-1)] $ \i 
-                -> sum `fmap` forM [1 .. ns] (\j -> (pow'' !! (j-1)) `VU.indexM` i)
+                -> sum `fmap` forM [1 .. ns] (\j -> (pow'' !! (j-1)) `V.indexM` i)
 
     let f   = map (\i -> fromIntegral i / fromIntegral k) [0 .. (k2-1)]
         pow = map (/ fromIntegral ns) pow'
 
     -- frequency binning (P.552, NR)
         (ff, pp) = unzip $ binAverage nb f pow
-        cc       = ci confi nb ns ((VU.length x - nz) `div` ns) nz
+        cc       = ci confi nb ns ((V.length x - nz) `div` ns) nz
 
     -- power diagnostics
     --when (length ff < 2) $ error "PSD.psd: time series too short"
@@ -121,20 +121,18 @@ psd' confi ns nb x' = do
     --    outPower = df * sum pp
     --    inPower = (sum . map (^2) $ x') / fromIntegral (length x')
     --printf "in = %g, out = %g\n" inPower outPower
-    return (ff, pp, cc)
+    return (V.fromList ff, V.fromList pp, cc)
 
 psdvel = psdvel' 0.95
 psdvel' :: Double                                               -- ^ confidence interval
        -> Int                                                   -- ^ number of sections
        -> Int                                                   -- ^ number of freq binning
-       -> [Double] -> [Double]                                  -- ^ input
-       -> IO ([Double], [Double], [Double], [Double], [Double])
+       -> V.Vector Double -> V.Vector Double                    -- ^ input
+       -> IO (V.Vector Double, V.Vector Double, V.Vector Double, V.Vector Double, (Double, Double))
                 -- ^ frequcney, power of ke, p.of cw, p.of ccw, 95% confidence interval
-psdvel' confi ns nb u' v' = do
-    let u  = VU.fromList u'
-        v  = VU.fromList v'
-        (_, nz) = slicer ns 1 u
-        k  = (VU.length u - nz) `div` ns
+psdvel' confi ns nb u v = do
+    let (_, nz) = slicer ns 1 u
+        k  = (V.length u - nz) `div` ns
         k2 = if even k then k `div` 2 + 1 else (k+1) `div` 2 -- see (***)
 
     when (nz /= 0) $ hPutStrLn stderr ("PSD.psdvel: zero padding " ++ show nz)
@@ -146,9 +144,9 @@ psdvel' confi ns nb u' v' = do
     (ke'', cw'', ccw'') <- unzip3 `fmap` forM [0 .. (k2-1)] (\i -> do
                         (ke2, cw2, ccw2) <- unzip3 `fmap` forM [1 .. ns] (\j ->
                                                 let (ke0, cw0, ccw0) = pow'' !! (j - 1)
-                                                 in liftA3 (,,) (ke0 `VU.indexM` i)
-                                                                (cw0 `VU.indexM` i)
-                                                                (ccw0  `VU.indexM` i))
+                                                 in liftA3 (,,) (ke0 `V.indexM` i)
+                                                                (cw0 `V.indexM` i)
+                                                                (ccw0  `V.indexM` i))
                         return (sum ke2, sum cw2, sum ccw2))
 
     let f = map (\i -> fromIntegral i / fromIntegral k) [0 .. (k2-1)]
@@ -160,23 +158,18 @@ psdvel' confi ns nb u' v' = do
         cw  = map snd $ binAverage nb f cw'
         ccw = map snd $ binAverage nb f ccw'
 
-        cc       = ci confi nb ns ((VU.length u - nz) `div` ns) nz
+        cc       = ci confi nb ns ((V.length u - nz) `div` ns) nz
 
-    return (ff, ke, cw, ccw, cc)
+    return (V.fromList ff, V.fromList ke, V.fromList cw, V.fromList ccw, cc)
 
 -- | use least squares fit to detrend
-detrend :: VU.Vector Double -> VU.Vector Double
-detrend x = let n  = VU.length x
+detrend :: V.Vector Double -> V.Vector Double
+detrend x = let n  = V.length x
                 n2 = n `div` 2
-                a1, a2 :: [Double]
-                a1 = map fromIntegral $ take n [negate n2, 1-negate n2 ..]
-                a2 = replicate n 1
-                x' = VU.toList x
-                (b', _, _) = lsFit2dangerous x' a1 a2 -- last argument is dummy
-                b  = concat b'
-             in VU.fromList
-                $ zipWith3 (\x0 a1' a2' -> x0 - a1' * (b !! 0) - a2' * (b !! 1)) x' a1 a2
+                a1 = V.fromList $ map fromIntegral $ take n [negate n2, 1-negate n2 ..]
 
+                ((b0, b1), _, _) = lsFit2 x a1 Nothing
+             in V.zipWith (\x0 a1' -> x0 - a1' * b0 -  b1) x a1
 
 binAverage :: Int -> [Double] -> [Double] -> [(Double, Double)]
 binAverage _ [] _ = []
@@ -191,48 +184,48 @@ binAverage n f p = let (fa, fb) = splitAt n f
 -- | Windowing before FFT
 -- see sec 13.4 (pp.554--) of NR for background (including why (1/10)-cosine is not used)
 --
-psdWindow :: VU.Vector Double -> IO (VU.Vector Double)
+psdWindow :: V.Vector Double -> IO (V.Vector Double)
 psdWindow x =
-    let n  = VU.length x
-        h  = window (n-1)
+    let n   = V.length x
+        h   = window (n-1)
         -- h  = listArray (0,n-1) $ repeat 1 :: Array Int Double -- no window
-        he = VU.fromList $ elems h
-        dim = VU.sum $ VU.map (^2) he
-        y  = VU.zipWith (*) he x
+        he  = V.fromList $ elems h
+        dim = V.sum $ V.map (^2) he
+        y   = V.zipWith (*) he x
         nm  = fromIntegral n / dim -- normalise by (13.4.11)
-     in VU.map (* nm) `fmap` psdRaw y
+     in V.map (* nm) `fmap` psdRaw y
 
-psdWindowVel :: VU.Vector Double -> VU.Vector Double
-            -> IO (VU.Vector Double, VU.Vector Double, VU.Vector Double)
+psdWindowVel :: V.Vector Double -> V.Vector Double
+            -> IO (V.Vector Double, V.Vector Double, V.Vector Double)
 psdWindowVel u v =
-    let n  = VU.length u
+    let n  = V.length u
         h  = window (n-1)
         -- h  = listArray (0,n-1) $ repeat 1 :: Array Int Double  -- no window
-        he = VU.fromList $ elems h
-        dim = VU.sum $ VU.map (^2) he
-        yu  = VU.zipWith (*) he u
-        yv  = VU.zipWith (*) he v
+        he = V.fromList $ elems h
+        dim = V.sum $ V.map (^2) he
+        yu  = V.zipWith (*) he u
+        yv  = V.zipWith (*) he v
         nm  = fromIntegral n / dim -- normalise by (13.4.11)
-     in psdRawVel yu yv >>= \(ke', cw', ccw') -> let ke  = VU.map (* nm) ke'
-                                                     cw  = VU.map (* nm) cw'
-                                                     ccw = VU.map (* nm) ccw'
+     in psdRawVel yu yv >>= \(ke', cw', ccw') -> let ke  = V.map (* nm) ke'
+                                                     cw  = V.map (* nm) cw'
+                                                     ccw = V.map (* nm) ccw'
                                                   in return (ke, cw, ccw)
                 
 --
 -- | use FFT to calculate psd -- no frills
 --
-psdRaw :: VU.Vector Double -> IO (VU.Vector Double)
+psdRaw :: V.Vector Double -> IO (V.Vector Double)
 psdRaw x = do
-    let n = VU.length x
+    let n = V.length x
 
-    a <- createCArray (0, n-1) $ \ptr -> VU.zipWithM_ (pokeElemOff ptr)
-                                            (VU.fromList [0 .. (n-1)]) x
+    a <- createCArray (0, n-1) $ \ptr -> V.zipWithM_ (pokeElemOff ptr)
+                                                     (V.fromList [0 .. (n-1)]) x
     let fa   = elems $ dftRC a
         pow' = unfolddftRC n . map (^2) . map magnitude $ fa
         pow  = map (* (1 / fromIntegral n)) pow'
                                  -- normalise by  (1 * duration / n^2)
                                  -- https://researchmap.jp/jovy4q1ti-44320/#_44320
-    return $ VU.fromList pow
+    return $ V.fromList pow
 
 unfolddftRC :: Int       -- ^ length of input to dftRC
             -> [Double]  -- ^ power (*not* original coefficients)
@@ -246,14 +239,14 @@ unfolddftRC n x
             | otherwise         = x'
        in zipWith doubler [0 .. (n-1)] x
 
-psdRawVel :: VU.Vector Double -> VU.Vector Double                    -- ^ u, v
-        -> IO (VU.Vector Double, VU.Vector Double, VU.Vector Double) -- ^ ke, cw, ccw
+psdRawVel :: V.Vector Double -> V.Vector Double                   -- ^ u, v
+        -> IO (V.Vector Double, V.Vector Double, V.Vector Double) -- ^ ke, cw, ccw
 psdRawVel u v = do
-    let n = VU.length u
-    a <- createCArray (0, n-1) $ \ptr -> VU.zipWithM_ (pokeElemOff ptr)
-                                            (VU.fromList [0 .. (n-1)]) u
-    b <- createCArray (0, n-1) $ \ptr -> VU.zipWithM_ (pokeElemOff ptr)
-                                            (VU.fromList [0 .. (n-1)]) v
+    let n = V.length u
+    a <- createCArray (0, n-1) $ \ptr -> V.zipWithM_ (pokeElemOff ptr)
+                                            (V.fromList [0 .. (n-1)]) u
+    b <- createCArray (0, n-1) $ \ptr -> V.zipWithM_ (pokeElemOff ptr)
+                                            (V.fromList [0 .. (n-1)]) v
 
     let fa = elems $ dftRC a
         fb = elems $ dftRC b
@@ -272,7 +265,7 @@ psdRawVel u v = do
         cw   = map (* (0.5 / fromIntegral n)) (unfolddftRC n cw')
         ccw  = map (* (0.5 / fromIntegral n)) (unfolddftRC n ccw')
 
-    return (VU.fromList ke, VU.fromList cw, VU.fromList ccw)
+    return (V.fromList ke, V.fromList cw, V.fromList ccw)
 
 {-
 import System.Random.MWC     (withSystemRandom, asGenIO)
