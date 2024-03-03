@@ -1,5 +1,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 --
+-- FORTRAN does not have *.h and we stick to FFI, not updating to CApi
+--
 module Oceanogr.GammaN (
             gamma_n,
             neutral_surfaces,
