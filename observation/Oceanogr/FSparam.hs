@@ -28,7 +28,7 @@ import Data.Maybe (isJust, fromJust, fromMaybe)
 import Data.Ord (comparing)
 import Data.Vector.Algorithms.Intro (sortBy)
 import GHC.Float (float2Double)
-import Numeric.IEEE (nan)
+import Numeric.IEEE (IEEE, nan)
 import System.IO (Handle, stderr, hPutStrLn)
 import Text.Printf (hPrintf, printf)
 
@@ -96,13 +96,13 @@ bfreqBG seg ctd gamman = do
 ---
 --- grid interval (with 1% fluctuation allowed)
 ---
-gridSizeOf :: (V.Unbox a, RealFloat a, Show a) => V.Vector a -> a
+gridSizeOf :: (V.Unbox a, RealFloat a, Show a, IEEE a) => V.Vector a -> a
 gridSizeOf x
     = let dxs = V.zipWith (-) (V.tail x) x
           dx  = V.head dxs
           fluc = V.map (\x' -> abs (x' - dx) / dx) dxs
        in if V.any (> 0.01 * dx) fluc
-            then error "gridSizeOf: uneven grid"
+            then nan -- error "gridSizeOf: uneven grid"
             else dx
 ---
 --- strain
@@ -265,7 +265,7 @@ specLevel :: Double -- ^ mean buoyancy freq in [1/s]
             -> (Double, Double)                   -- ^ integration limits (m1, m2)
             -> Double
 specLevel bf (f, p) (m1, m2)
-    = let pGM = shearGM bf f
+    = let pGM = shearGM81 bf f -- shearGM bf f
           (_, pint, pGMint) = V.unzip3
                                $ V.filter (\(f0,_,_) -> m1 <= f0 && f0 <= m2)
                                $ V.zip3 f p pGM
@@ -283,6 +283,23 @@ shearGM bf
           ms = m0 * (bf / n0)
           c  = (bf / n0) * e0 * 2 / 3.14159265
        in V.map (\m' -> m'^2 * 0.75 * c * ms / (ms^2 + m'^2))
+
+--
+-- Munk (1981) spectra
+--
+jstar :: Double -- scale mode
+jstar = 3
+denominator :: Double
+denominator = (3.14159265 / 2 - atan (1 / jstar)) / jstar + 0.5 / (1 + jstar^2)
+shearGM81 :: Double -> V.Vector Double -> V.Vector Double
+shearGM81 bf
+    = let n0 = 2 * 3.14159265 * 3 / (60 * 60) :: Double -- [rad/s]
+          e0 = 6.3e-5                         :: Double -- "dimensionless"
+          b0 = 1300                           :: Double -- [m]
+          djdm = b0 * (n0 / bf) / 3.14159265
+       in V.map (\m' -> let j = m' * djdm
+                            c = b0^2 * n0 * bf * e0 * 1.5 * djdm / denominator
+                         in c * m'^2 / (j^2 + jstar^2))
 
 --
 -- misc.
@@ -372,13 +389,14 @@ fsp ctd gamman ladcp seg nf h' =
      z = inSegment seg (ladcpZ ladcp) (ladcpZ ladcp)
      e = inSegment seg (ladcpZ ladcp) (ladcpEV ladcp)
      n = inSegment seg (ladcpZ ladcp) (ladcpN ladcp)
-     dzLADCP = float2Double $ gridSizeOf z
      lat = float2Double . stnLatitude . ctdStation  $ ctd
      g    = inSegment seg (ctdP ctd) gamman
+     dzLADCP' = gridSizeOf z
   in
-   if V.any isNaN g || V.any isNaN v
-   then hPutStrLn stderr "fsp: gap(s) in data" >> return Nothing
+   if V.any isNaN g || V.any isNaN v || isNaN dzLADCP'
+   then hPutStrLn stderr "fsp: gap(s) in data -- segment discarded" >> return Nothing
    else do
+    let dzLADCP = float2Double dzLADCP'
     -- background stratification
     (p, n2, n2fit) <- bfreqBG seg ctd gamman
 
