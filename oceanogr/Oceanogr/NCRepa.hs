@@ -13,7 +13,7 @@
 --  choice is correct.
 --
 module Oceanogr.NCRepa (
-    get1Double, getReal, getInt, getChar, getRealAvail, getCharAvail)
+    get1Double, getReal, getShort, getInt, getChar, getRealAvail, getCharAvail)
 where
 import Data.NetCDF
 import Data.NetCDF.Repa ()
@@ -60,18 +60,6 @@ getReal info varname
                 case eval of
                     Left err -> error $ show err
                     Right arr  -> return $ mycoardsScale var arr
-            -- Int (< 2147483647) -> Float (<3.e38)
-            NcInt   -> do
-                eval <- get info var :: IO (Either NcError (Array F sh CInt))
-                case eval of
-                    Left err -> error $ show err
-                    Right arr  -> return $ mycoardsScale var arr
-            -- Short (< 32767) -> Float (3.e38)
-            NcShort   -> do
-                eval <- get info var :: IO (Either NcError (Array F sh CShort))
-                case eval of
-                    Left err -> error $ show err
-                    Right arr  -> return $ mycoardsScale var arr
             -- otherwise
             _       -> error "getReal: not implemented"
 
@@ -79,11 +67,29 @@ getInt :: forall sh. (Shape sh) => NcInfo NcRead -> String -> IO (Array F sh CIn
 getInt info varname
   = case ncVar info varname of
       Nothing  -> error "getInt: no such variable"
-      Just var -> do
-        eval <- get info var :: IO (Either NcError (Array F sh CInt))
-        case eval of
-            Left err -> error $ show err
-            Right a  -> return a
+      Just var ->
+        case ncVarType var of
+            NcInt -> do
+                eval <- get info var :: IO (Either NcError (Array F sh CInt))
+                case eval of
+                    Left err -> error $ show err
+                    Right arr  -> return arr
+            -- otherwise
+            _       -> error "getReal: not implemented"
+
+getShort :: forall sh. (Shape sh) => NcInfo NcRead -> String -> IO (Array F sh CShort)
+getShort info varname
+  = case ncVar info varname of
+      Nothing  -> error "getShort: no such variable"
+      Just var ->
+        case ncVarType var of
+            NcShort -> do
+                eval <- get info var :: IO (Either NcError (Array F sh CShort))
+                case eval of
+                    Left err -> error $ show err
+                    Right arr  -> return arr
+            -- otherwise
+            _       -> error "getReal: not implemented"
 
 getChar :: forall sh. (Shape sh) => NcInfo NcRead -> String -> IO (Array F sh CChar)
 getChar info varname
