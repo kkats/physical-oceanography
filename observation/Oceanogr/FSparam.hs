@@ -209,8 +209,11 @@ correctLADCPspec isPre2002 dzt dzr d' dz m
             then V.zipWith4 (\a b c e -> 1.0 / (a * b * c * e)) s1 s2 s3 s4 -- T_UH (1)
             else V.zipWith4 (\a b c e -> 1.0 / (a * b * c * e)) s1 s5 s5 s4 -- T_VI (8)
 
-correctCTDcoef :: Double -> Double
-correctCTDcoef dz = 1.0 / (sinc $ dz / 2 / 3.14159265)^2
+correctCTDspec :: Double -- ^ dz
+               -> V.Vector Double -- ^ vertical wave number
+               -> V.Vector Double
+correctCTDspec dz
+    = V.map (\s' -> 1.0 / s') . V.map (^2) . V.map sinc . V.map (* (dz / 2))
 
 --
 -- "a high wave number limit representing a transition into wave-breaking phenomena"
@@ -404,7 +407,7 @@ fsp ctd gamman ladcp seg nf h' =
 
     -- strain spectrum
     (stf, stp', stc, strain) <- strainPSD n2mean dp n2'
-    let stp = V.map (* correctCTDcoef dp) stp'
+    let stp = V.zipWith (*) stp' (correctCTDspec dp stf)
 
     -- shear spectrum
     (shf, shke', shcw', shccw', shc) <- shearPSD seg ladcp
