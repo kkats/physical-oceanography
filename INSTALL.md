@@ -1,13 +1,6 @@
 # Installation
 
-### For `LTS-13.17`
-`stack build` complains a version clash in `base` for `hstatistics-0.3`, but the
-recommended trick to `stack.yaml` somehow picks up an older version. Add
-```
-- github: amcphail/hstatistics
-  commit: bae125738c0d6ce68ff23093d5d23ebf32753f67
-```
-to `extra-deps:`.
+Now I prefer `cabal` to `stack`.
 
 ## oceanogr
 
@@ -20,7 +13,7 @@ Following libraries are necessary before installing the Haskell library.
 
 
     % cd oceanogr
-    % stack install
+    % cabal build
 
 ## gamma-n
 
@@ -47,13 +40,11 @@ You need [NetCDF](https://www.unidata.ucar.edu/software/netcdf/) library in Fort
 A table of neutral density from 1 to 3000 dbar followed by interpolated salinity, temperature, pressure should appear on screen.
 
     % cd ../..
-    % stack build
-    % stack test
-    % stack install
+    % cabal build
 
 Two tables will be output. The first table is the output from this Haskell interface. The second is a copy of Fortran output. Sould be the same except format differences.
 
 ## observation
 
     % cd observation
-    % stack install
+    % cabal build

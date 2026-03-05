@@ -14,6 +14,7 @@ import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sa_from_sp, gsw_pt_from_ct, gsw_sig
 import Oceanogr.GammaN (gamma_n)
 
 import qualified Data.ByteString.Char8       as B
+import qualified Data.List.NonEmpty          as NE
 import qualified Data.Vector.Unboxed         as V
 import qualified Data.Vector.Unboxed.Mutable as VM
 import Control.Monad (unless, when)
@@ -111,7 +112,7 @@ readCTD fname a = do
     let (header, body') = break (isHeaderLastLine a) (B.lines c)
         body            = if null body'
                             then error $ "readCTD(): HeaderLastLine not found in " ++ fname
-                            else tail body'
+                            else NE.tail (NE.fromList body')
 
         longitude = fromMaybe (error $ "Longitude not found in " ++ fname)
                         $ (getLast . mconcat) $ map (Last . getLongitude a) header
@@ -322,7 +323,7 @@ abscissaCTD ctds' list =
         dx = map (\l -> let s0 = ctdStation $ ctds !! l
                             s1 = ctdStation $ ctds !! (l-1)
                          in gsw_distance (putLoc (stnLongitude s0) (stnLatitude s0))
-                                        (putLoc (stnLongitude s1) (stnLatitude s1))) (tail nxs)
+                                        (putLoc (stnLongitude s1) (stnLatitude s1))) (NE.tail (NE.fromList nxs))
         ac = scanl (+) 0 dx
      in (lons, lats, deps, 0:dx, ac)
 
@@ -335,8 +336,8 @@ readStnList f = (filter (\(s,_) -> not (B.null s)) . map extractor
   where
     extractor :: B.ByteString -> Cast
     extractor ll = let ws = B.words ll
-                    in if length ws > 1 then (head ws, si $ ws !! 1)
-                                        else ("", 0)
+                    in if null (NE.nonEmpty ws) then ("", 0)
+                                                else (NE.head (NE.fromList ws), si $ ws !! 1)
     isComment :: B.ByteString -> Bool
     isComment ll = B.length ll > 0 && B.head ll == '#'
 

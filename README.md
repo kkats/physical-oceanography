@@ -4,12 +4,12 @@ Tools for physical oceanographic data analysis.
 ## oceanogr
 
 Modules for IO (binary IO, netcdf), special data handling (SAM index, ETOPO5 topography, WGHC climatology),
-linear data analysis (EOF, low-pass filters, leastsquare fit), power spectra (PSD),
+linear data analysis (EOF, low-pass filters, leastsquares fit), power spectra (PSD),
 parallel matrix computation (RepaExpand), and others (Misc).
 
 ## observation
 
-For visualising CTD data from [GO-SHIP](http://www.go-ship.org)-style, full-depth observation.
+For visualising CTD and bottle data from [GO-SHIP](http://www.go-ship.org)-style, full-depth observation. Now with LADCP, finescale parameterisation for turbulence kinetic energy, and XCTD.
 
 1. It is necessary to provide `CTDfileRead`, a set of header information for the CTD output (e.g. `example/SBEproc.hs` -- this is for output from Sea-Bird Scientific CTD process programs).
 2. Build a list of CTD station to plot using `readCTD` (e.g. `example/MakeList.hs`).

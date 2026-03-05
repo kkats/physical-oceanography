@@ -14,6 +14,7 @@ import Oceanogr.LPF (lpfFIR)
 import Oceanogr.GSWtools (gsw_p_from_z, gsw_sa_from_sp, gsw_ct_from_t, gsw_rho, gsw_grav)
 
 import Control.Monad (when)
+import qualified Data.List.NonEmpty           as NE
 import qualified Data.Vector.Unboxed         as V
 import qualified Data.Vector.Unboxed.Mutable as VM
 import qualified Data.ByteString.Char8       as B
@@ -125,14 +126,14 @@ readXCTD expo fname = do
 
     c <- B.readFile fname -- file is so small that we rely on laziness
     let ll = B.lines c
-        ww = split . head $ ll
+        ww = split (NE.head (NE.fromList ll))
         latitude  = deg2min (ww !! 4)
         longitude = deg2min (ww !! 5)
-        stnnbr    = B.filter (/= ' ') . head $ ww -- serial
+        stnnbr    = B.filter (/= ' ') . NE.head $ (NE.fromList ww) -- serial
         cast      = si (ww !! 1) -- "material number"
         date      = ww !! 2
         time      = B.take 4 (ww !! 3)
-        body      = tail ll
+        body      = NE.tail (NE.fromList ll)
         maxn      = length body
 
     -- data
@@ -145,7 +146,7 @@ readXCTD expo fname = do
         go n
             | n >= maxn = return ()
             | otherwise = let w0 = split (body !! n)
-                              d  = head w0 
+                              d  = NE.head (NE.fromList w0)
                               t  = w0 !! 1
                               o  = w0 !! 2
                               s  = w0 !! 3 

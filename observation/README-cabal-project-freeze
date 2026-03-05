@@ -1,0 +1,2 @@
+(Thu Mar  5 15:24:07 JST 2026)
+For unknown reasons, it is necessary to downgrade "cassava ==0.5.4.1" in cabal.project.freeze for GHC-9.10.3

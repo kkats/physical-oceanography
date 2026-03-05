@@ -1,10 +1,18 @@
-with-compiler: ghc-9.2.8
+-- with-compiler: ghc-9.2.8
+-- with-compiler: ghc-9.4.8
+with-compiler: ghc-9.10.3
 
 packages:
   ./,
-  ../oceanogr/,
-  ../gamma-n/,
-  ../../GSW-Haskell/
+  ../oceanogr,
+  ../gamma-n,
+  ../../GSW-Haskell-0.3
+
+source-repository-package
+    type: git
+    location: https://github.com/kkats/hnetcdf
+    tag: d9f92268c7d6d25e6ea1f99328ba889834a5b7ee
+-- this 'tag' is for a committ
 
 allow-older: none
-allow-newer: none
+allow-newer: *

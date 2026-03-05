@@ -15,6 +15,7 @@ import qualified Data.ByteString.Char8 as BC   -- from Char8
 import Data.Char (isSpace)
 import Data.Csv
 import Data.List (sortOn, findIndex)
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import Numeric.IEEE (nan)
@@ -184,7 +185,7 @@ cleanse val flag = if flag == 2
 splice :: [[Float]] -- [[p0,t0,s0,o0...],[p1,t1,s1,o1...], ...]
        -> [[Float]] -- [[pN,pN-1,... p0],[tN,tN-1,...t0], ...]
 splice []  = error "splice: empty input"
-splice bd0 = splice' bd0 (replicate (length (head bd0)) [])
+splice bd0 = splice' bd0 (replicate (length (NE.head (NE.fromList bd0))) [])
 splice' :: [[Float]] -> [[Float]] -> [[Float]]
 splice' []        out = out
 splice' (bd1:bds) out = splice' bds (zipWith (\x1 xs -> x1:xs) bd1 out)
@@ -204,7 +205,7 @@ toBtl' pa@(p:_) out
                            
 toBtl :: V.Vector OneBtl -> [BTLdata]
 toBtl vs
-    = let ws = V.filter (\(_, f0) -> not (null f0) && (not . isNaN $ head f0)) -- not used if pressure is bad
+    = let ws = V.filter (\(_, f0) -> not (null f0) && (not . isNaN $ NE.head (NE.fromList f0))) -- not used if pressure is bad
              $ V.map (\v -> let stn = toStation v
                                 prs = cleanse (ctdprs v) (ctdprsF v)  -- 0
                                 tmp = cleanse (ctdtmp v) (ctdtmpF v)
@@ -226,8 +227,8 @@ toBtl vs
                                        c11, c12, c13, s6f, tca, alk, d13, d14])) vs
           bs = toBtl' (V.toList ws) []
        in map (\(stn, btldata)
-                -> let idx = (fst . unzip
-                           $ sortOn snd (zip [0, 1 ..] (head btldata))) -- index sorted by pressure
+                -> let idx = fst . unzip
+                           $ sortOn snd (zip [0, 1 ..] (NE.head (NE.fromList btldata))) -- index sorted by pressure
                     in BTLdata stn (U.fromList $ map ((btldata !! 0) !!) idx) -- 0
                                    (U.fromList $ map ((btldata !! 1) !!) idx)
                                    (U.fromList $ map ((btldata !! 2) !!) idx)
@@ -253,7 +254,7 @@ readBtl = do
         -- header if "EXPO..."
         hdr' = filter (\l -> BC.take 4 l == "EXPO") ll
         hdr = if length hdr' == 1
-                   then head hdr'
+                   then NE.head (NE.fromList hdr')
                    else error "no header found"
         -- sep if "A14,A6"
         hdrlines = findIndex (\l -> BC.take 4 l == "A14,") ll

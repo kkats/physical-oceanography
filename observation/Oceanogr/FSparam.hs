@@ -24,6 +24,7 @@ import Oceanogr.GSWtools (gsw_nsquared)
 import qualified Data.Vector.Unboxed as V
 import Control.Monad (when)
 import Data.List (sortOn, zip5)
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isJust, fromJust, fromMaybe)
 import Data.Ord (comparing)
 import Data.Vector.Algorithms.Intro (sortBy)
@@ -86,7 +87,9 @@ bfreqBG seg ctd gamman = do
     --
     -- n2 = p1 x^2 + p2 x + p3 + error
     --
-    let x          = map (subtract $ 0.5 * (head pmid + last pmid)) pmid
+    let pmid'      = if null pmid then error "bfreqBG(): empty pmid"
+                                  else NE.fromList pmid
+    let x          = map (subtract $ 0.5 * (NE.head pmid' + NE.last pmid')) pmid
         x2         = map (^2) x
         ((c0, c1, c2), _, _) = lsFit3 (V.fromList n2) (V.fromList x2) (V.fromList x) Nothing
         n2fit      = zipWith (+) (map (* c0) x2) (map (\x0 -> x0 * c1 + c2) x)
@@ -273,10 +276,10 @@ specLevel bf (f, p) (m1, m2)
 --
 -- Garrett-Munk (1976) shear spectrum (m^2 E^{GM}_k(m)) after (23) and (24)
 --
-shearGM :: Double          -- ^ mean buoyancy freq in [1/s]
+_shearGM :: Double          -- ^ mean buoyancy freq in [1/s]
         -> V.Vector Double -- anguar freq
         -> V.Vector Double
-shearGM bf
+_shearGM bf
     = let n0 = 2 * 3.14159265 * 3 / (60 * 60) :: Double -- 3 [cph]
           e0 = 3.0e-3                           :: Double -- [m^2 s^{-2}]
           m0 = 4 * 3.14159265 / 1300            :: Double -- [1/m], mode 4

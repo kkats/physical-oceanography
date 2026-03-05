@@ -18,6 +18,7 @@ import Oceanogr.BinaryIO (readVecI16le)
 
 import Data.Array.Repa hiding (map)
 import qualified Data.Vector.Unboxed as U
+import qualified Data.List.NonEmpty as NE
 
 -- import Text.Printf (printf)
 
@@ -32,7 +33,7 @@ readEtopo5 :: IO (Array U DIM2 Double, U.Vector Double, U.Vector Double)
 readEtopo5 = do
     topo' <- readVecI16le dataFile
     let topo = fromUnboxed (ix2 2160 4320) topo'
-        lat = map ((* dEtopo5) . fromIntegral) $ reverse $ tail ([(-90*12) .. (90*12)]::[Integer]) -- first is redundant
+        lat = map ((* dEtopo5) . fromIntegral) . reverse . NE.tail $ NE.fromList ([(-90*12) .. (90*12)]::[Integer]) -- first is redundant
         lon = map ((* dEtopo5) . fromIntegral) $ init ([(0*12) .. (360*12)]::[Integer])  -- last is redundant
 
     return (topo, U.fromList lon, U.fromList lat)

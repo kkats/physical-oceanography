@@ -13,6 +13,7 @@ import Numeric.LinearAlgebra (ident, linearSolve)
 import qualified Data.Array                 as A
 import qualified Numeric.LinearAlgebra.Data as V
 import qualified Numeric.LinearAlgebra.Data as M
+import qualified Data.List.NonEmpty as NE
 
 -- import Debug.Trace (trace)
 --
@@ -42,32 +43,38 @@ lpfIIR :: Double -- ^ cutoff period
        -> [Double] -- ^ input
        -> (Int, [Double]) -- ^ (filter order, output)
 
-lpfIIR cutoff sampling s x
-    = let df = 1.0 / (sampling * fromIntegral (length x - 1))
-          wp = (1.0 / cutoff - 5 * df) / (1.0 / cutoff)
-          ws = (1.0 / cutoff + 5 * df) / (1.0 / cutoff)
-          f  = butterworthLowpass (wp, s) (ws, s)
-          bn = A.bounds $ fst f
-          an = A.bounds $ snd f
-          nfilt = 1 + max (snd bn - fst bn) (snd an - fst an)
-          nfact = 3 * (nfilt - 1) -- length of edge transients
+lpfIIR cutoff sampling s x'
+ | null x' = error "lpfIIR: empty input"
+ | otherwise =
+       let x = NE.fromList x'
+           df = 1.0 / (sampling * fromIntegral (NE.length x - 1))
+           wp = (1.0 / cutoff - 5 * df) / (1.0 / cutoff)
+           ws = (1.0 / cutoff + 5 * df) / (1.0 / cutoff)
+           f  = butterworthLowpass (wp, s) (ws, s)
+           bn = A.bounds $ fst f
+           an = A.bounds $ snd f
+           nfilt = 1 + max (snd bn - fst bn) (snd an - fst an)
+           nfact = 3 * (nfilt - 1) -- length of edge transients
 
           -- extrapolated input (LL.86-90)
-          beg = map (\w -> 2 * head x - w) $ reverse
-                                            $ take nfact (tail x)
-          end = map (\w -> 2 * last x - w) $ take nfact (tail $ reverse x)
-          x'  = beg ++ x ++ end
+           be = take nfact (NE.tail x)
+           beg = if null be then error "be is empty"
+                            else NE.map (\w -> 2 * NE.head x - w) $ NE.reverse (NE.fromList be)
+           en = take nfact (NE.tail $ NE.reverse x)
+           end = if null en then error "en is empty"
+                            else NE.map (\w -> 2 * NE.last x - w) (NE.fromList en)
+           y  = beg `NE.append` x `NE.append` end
 
           -- initial condition
-          zi = map (* head x') $ concat $ M.toLists $ lpfInit f
+           zi = map (* (NE.head y)) $ concat $ M.toLists $ lpfInit f
 
           -- let's go
-          o1  = iir_df2t f zi x'
-          o2  = iir_df2t f zi $ reverse o1
-          o2' = reverse $ drop nfact $ take (length o2 - nfact) o2
+           o1  = iir_df2t f zi (NE.toList y)
+           o2  = iir_df2t f zi $ reverse o1
+           o2' = reverse $ drop nfact $ take (length o2 - nfact) o2
 
-       in if nfact > length x then error "input too short"
-                              else (nfilt, o2')
+        in if nfact > length x then error "input too short"
+                               else (nfilt, o2')
 
 ---
 --- | local imprementation of Transposed Direct Form II after DSP.Filter.IIR.IIR.iir_df2t
