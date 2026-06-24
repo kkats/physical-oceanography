@@ -9,8 +9,8 @@ zOnP', gOnP', sigma1OnP', sigma2OnP', sigma4OnP'
 ) where
 
 import Oceanogr.GammaN (gamma_n, neutral_surfaces)
-import Oceanogr.GSW (linearInterp1)
 import Oceanogr.GSWtools (gsw_ct_from_t, gsw_sigma1, gsw_sa_from_sp, gsw_sigma2, gsw_sigma4)
+import Oceanogr.Misc (linearInterp1)
 
 import Oceanogr.CTD
 
